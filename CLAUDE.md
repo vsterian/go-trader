@@ -84,6 +84,23 @@
 - `StrategyConfig.HTFFilter` — per-strategy bool (`htf_filter` in JSON); Go appends `--htf-filter` to script args; not applied to options strategies or `delta_neutral_funding` (funding-rate harvest is direction-agnostic); guard in both `generateConfig` and all Python check scripts
 - `delta_neutral_funding` is perps-only (not in spot registry); function lives in `spot/strategies.py` but without `@register_strategy`; registered only in `futures/strategies.py`
 
+## ML Signal Enhancement
+- All ML logic in Python subprocess model (stateless — load from disk, compute, save to disk)
+- `MLConfig` is a pointer field (`*MLConfig`) in `StrategyConfig` — nil when absent, backward compatible
+- `MLBlock` is a pointer field (`*MLBlock`) in `SpotResult` — nil when ML disabled, backward compatible
+- `MLState` is a pointer field (`*MLState`) in `StrategyState` — nil when no ML activity
+- Features opt-in per strategy via `ml_config.enabled` in config.json; disabled by default
+- Model persistence uses pickle files in `models/` directory (not SQLite)
+- ML scripts: `ml_signal_generator.py` (core engine), `dynamic_thresholds.py` (adaptive thresholds), `performance_monitor.py` (trade tracking), `record_ml_outcome.py` (outcome recording), `correlation_analyzer.py` (position correlation), `check_adaptation.py` (re-optimization trigger)
+- check_strategy.py ML flags: `--ml-enabled`, `--profit-pct=<float>`, `--ml-buy-base=<float>`, `--ml-sell-base=<float>` — parsed via manual `_flag_val()` helper (not argparse)
+- ML does NOT apply to `delta_neutral_funding` strategies (funding-rate harvest is direction-agnostic)
+- Go main.go ML functions: `recordMLOutcome()` (fire-and-forget goroutine), `checkMLCorrelation()` (pre-buy check), `checkMLAdaptation()` (periodic cycle)
+- Adaptation cycle: every `cfg.AdaptationCheckCycles` cycles (default 60), checks ML-enabled strategies with `adaptation_enabled=true`
+- Config version: 5 (v4→v5 adds `adaptation_check_cycles`)
+- Init wizard: `MLEnabled`, `MLBuyBase`, `MLSellBase`, `MLAdaptation` fields in `InitOptions`; applied to all spot/perps strategies (except delta_neutral_funding) in `generateConfig()`
+- Smoke test ML init: `./go-trader init --json '{"assets":["BTC"],"enableSpot":true,"spotStrategies":["sma_crossover"],"spotCapital":1000,"spotDrawdown":10,"mlEnabled":true}' --output /tmp/test.json` — verify `ml_config` block in output
+- ML tests: `uv run pytest shared_scripts/test_ml_signal_generator.py shared_scripts/test_dynamic_thresholds.py shared_scripts/test_performance_monitor.py shared_scripts/test_check_adaptation.py shared_scripts/test_correlation_analyzer.py shared_scripts/test_check_strategy_ml.py -v`
+
 ## Pull Requests
 - PR descriptions must reference the related GitHub issue if one exists, using `Closes #<number>` in the body (e.g. `Closes #46`)
 

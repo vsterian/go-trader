@@ -15,6 +15,18 @@ var pythonSemaphore = make(chan struct{}, 4)
 
 const scriptTimeout = 30 * time.Second
 
+// MLBlock is the optional ML enhancement data from check_strategy.py output.
+type MLBlock struct {
+	Enabled           bool    `json:"enabled"`
+	BuyProbability    float64 `json:"buy_probability"`
+	SellProbability   float64 `json:"sell_probability"`
+	RuleSignal        int     `json:"rule_signal"`
+	DynamicBuyThresh  float64 `json:"dynamic_buy_threshold"`
+	DynamicSellThresh float64 `json:"dynamic_sell_threshold"`
+	ModelTrained      bool    `json:"model_trained"`
+	TrainingSamples   int     `json:"training_samples"`
+}
+
 // SpotResult is the JSON output from check_strategy.py.
 type SpotResult struct {
 	Strategy   string                 `json:"strategy"`
@@ -25,6 +37,7 @@ type SpotResult struct {
 	Indicators map[string]interface{} `json:"indicators"`
 	Timestamp  string                 `json:"timestamp"`
 	Error      string                 `json:"error,omitempty"`
+	ML         *MLBlock               `json:"ml,omitempty"`
 }
 
 // HyperliquidResult is the JSON output from check_hyperliquid.py (signal check mode).

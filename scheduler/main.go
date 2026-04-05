@@ -458,6 +458,17 @@ func main() {
 							}
 						}
 					}
+					// ML: compute current position profit % for dynamic sell threshold
+					var mlProfitPct float64
+					if sc.MLConfig != nil && sc.MLConfig.Enabled && sc.Type == "spot" {
+						for sym, pos := range stratState.Positions {
+							if pos.Quantity > 0 && pos.AvgPrice > 0 {
+								if curPrice, ok := prices[sym]; ok && curPrice > 0 {
+									mlProfitPct = (curPrice/pos.AvgPrice - 1) * 100
+								}
+							}
+						}
+					}
 					mu.RUnlock()
 
 					// Phase 2: Lock — CheckRisk (fast, no I/O)
@@ -520,10 +531,28 @@ func main() {
 									mu.Unlock()
 								}
 							}
-						} else if result, signalStr, price, ok := runSpotCheck(sc, prices, logger); ok {
-							mu.Lock()
-							trades, detail = executeSpotResult(sc, stratState, result, signalStr, price, logger)
-							mu.Unlock()
+						} else {
+							// Append ML profit-pct for dynamic sell thresholds
+							if sc.MLConfig != nil && sc.MLConfig.Enabled && mlProfitPct != 0 {
+								sc.Args = append(append([]string{}, sc.Args...), fmt.Sprintf("--profit-pct=%.4f", mlProfitPct))
+							}
+							if result, signalStr, price, ok := runSpotCheck(sc, prices, logger); ok {
+								// ML: correlation check before buy
+								if sc.MLConfig != nil && sc.MLConfig.Enabled && result.Signal == 1 {
+									if blocked, reason := checkMLCorrelation(sc, result.Symbol, stratState, logger); blocked {
+										logger.Info("[ml] correlation blocked BUY: %s", reason)
+										result.Signal = 0
+										signalStr = "HOLD"
+									}
+								}
+								mu.Lock()
+								trades, detail = executeSpotResult(sc, stratState, result, signalStr, price, logger)
+								mu.Unlock()
+								// ML: record outcome after sell trade (fire-and-forget)
+								if sc.MLConfig != nil && sc.MLConfig.Enabled && result.Signal == -1 && trades > 0 {
+									go recordMLOutcome(sc, result.Symbol, mlProfitPct, logger)
+								}
+							}
 						}
 					case "options":
 						if result, signalStr, ok := runOptionsCheck(sc, posJSON, logger); ok {
@@ -722,6 +751,25 @@ func main() {
 		}
 		mu.Unlock()
 
+		// ML: periodic adaptation check
+		if cfg.AdaptationCheckCycles > 0 && cycle%cfg.AdaptationCheckCycles == 0 {
+			for _, sc := range cfg.Strategies {
+				if sc.MLConfig == nil || !sc.MLConfig.Enabled || !sc.MLConfig.AdaptationEnabled {
+					continue
+				}
+				// Extract symbol from args (first positional after strategy name)
+				if len(sc.Args) < 2 {
+					continue
+				}
+				symbol := sc.Args[1]
+				timeframe := "1h"
+				if len(sc.Args) >= 3 {
+					timeframe = sc.Args[2]
+				}
+				go checkMLAdaptation(sc, symbol, timeframe, notifier, &mu, state)
+			}
+		}
+
 		// Periodic update check (heartbeat: every cycle; daily: once per day).
 		if cfg.AutoUpdate == "heartbeat" {
 			checkForUpdates(cfg, notifier, &lastNotifiedHash, &mu, state)
@@ -840,6 +888,12 @@ func runSpotCheck(sc StrategyConfig, prices map[string]float64, logger *Strategy
 	if sc.HTFFilter {
 		args = append(append([]string{}, args...), "--htf-filter")
 	}
+	// Append ML flags when ML is enabled
+	if sc.MLConfig != nil && sc.MLConfig.Enabled {
+		args = append(append([]string{}, args...), "--ml-enabled")
+		args = append(args, fmt.Sprintf("--ml-buy-base=%.4f", sc.MLConfig.BuyThresholdBase))
+		args = append(args, fmt.Sprintf("--ml-sell-base=%.4f", sc.MLConfig.SellThresholdBase))
+	}
 	logger.Info("Running: python3 %s %v", sc.Script, args)
 
 	result, stderr, err := RunSpotCheck(sc.Script, args)
@@ -866,6 +920,13 @@ func runSpotCheck(sc StrategyConfig, prices map[string]float64, logger *Strategy
 		signalStr = "SELL"
 	}
 	logger.Info("Signal: %s | %s @ $%.2f", signalStr, result.Symbol, result.Price)
+
+	// Log ML predictions if present
+	if result.ML != nil && result.ML.Enabled {
+		logger.Info("[ml] buy_prob=%.3f sell_prob=%.3f trained=%v rule_signal=%d",
+			result.ML.BuyProbability, result.ML.SellProbability,
+			result.ML.ModelTrained, result.ML.RuleSignal)
+	}
 
 	// Use script price, fallback to fetched price
 	price := result.Price
@@ -896,6 +957,100 @@ func executeSpotResult(sc StrategyConfig, s *StrategyState, result *SpotResult, 
 		detail = fmt.Sprintf("[%s] %s %s @ $%.2f", sc.ID, signalStr, result.Symbol, price)
 	}
 	return trades, detail
+}
+
+// checkMLAdaptation runs check_adaptation.py for a strategy and logs/notifies results.
+func checkMLAdaptation(sc StrategyConfig, symbol, timeframe string, notifier *MultiNotifier, mu *sync.RWMutex, state *AppState) {
+	args := []string{sc.ID, symbol, timeframe}
+	stdout, stderr, err := RunPythonScript("shared_scripts/check_adaptation.py", args)
+	if err != nil {
+		fmt.Printf("[ml] adaptation check failed for %s: %v\n", sc.ID, err)
+		if len(stderr) > 0 {
+			fmt.Printf("[ml] stderr: %s\n", string(stderr))
+		}
+		return
+	}
+	var result struct {
+		NeedsAdaptation bool              `json:"needs_adaptation"`
+		Reason          string            `json:"reason"`
+		Metrics         map[string]interface{} `json:"current_metrics"`
+		Suggestion      string            `json:"suggestion"`
+	}
+	if err := json.Unmarshal(stdout, &result); err != nil {
+		fmt.Printf("[ml] parse adaptation result for %s: %v\n", sc.ID, err)
+		return
+	}
+	if result.NeedsAdaptation {
+		msg := fmt.Sprintf("\xf0\x9f\x94\x84 **ML Adaptation Needed** — %s\nReason: %s\nSuggestion: %s", sc.ID, result.Reason, result.Suggestion)
+		notifier.SendToAllChannels(msg)
+		// Update ML state
+		mu.Lock()
+		if s, ok := state.Strategies[sc.ID]; ok {
+			if s.MLState == nil {
+				s.MLState = &MLState{}
+			}
+			s.MLState.AdaptationCount++
+		}
+		mu.Unlock()
+	}
+}
+
+// checkMLCorrelation checks if a new BUY is too correlated with existing positions.
+// Returns (blocked, reason).
+func checkMLCorrelation(sc StrategyConfig, symbol string, s *StrategyState, logger *StrategyLogger) (bool, string) {
+	var existing []string
+	for sym, pos := range s.Positions {
+		if pos.Quantity > 0 {
+			existing = append(existing, sym)
+		}
+	}
+	if len(existing) == 0 {
+		return false, ""
+	}
+	existingJSON, _ := json.Marshal(existing)
+	args := []string{symbol, string(existingJSON)}
+	stdout, stderr, err := RunPythonScript("shared_scripts/correlation_analyzer.py", args)
+	if err != nil {
+		logger.Error("[ml] correlation check failed: %v", err)
+		stderrStr := string(stderr)
+		if stderrStr != "" {
+			logger.Error("[ml] stderr: %s", stderrStr)
+		}
+		return false, "" // fail open
+	}
+	var result struct {
+		Blocked bool   `json:"blocked"`
+		Reason  string `json:"reason"`
+	}
+	if err := json.Unmarshal(stdout, &result); err != nil {
+		logger.Error("[ml] parse correlation result: %v", err)
+		return false, ""
+	}
+	return result.Blocked, result.Reason
+}
+
+// recordMLOutcome spawns record_ml_outcome.py to feed trade result into ML model.
+// Fire-and-forget — does not block the main loop.
+func recordMLOutcome(sc StrategyConfig, symbol string, profitPct float64, logger *StrategyLogger) {
+	was := "false"
+	if profitPct > 0 {
+		was = "true"
+	}
+	args := []string{
+		sc.ID, symbol,
+		fmt.Sprintf("%.4f", profitPct),
+		was,
+	}
+	_, stderr, err := RunPythonScript("shared_scripts/record_ml_outcome.py", args)
+	if err != nil {
+		logger.Error("[ml] record outcome failed: %v", err)
+		stderrStr := string(stderr)
+		if stderrStr != "" {
+			logger.Error("[ml] stderr: %s", stderrStr)
+		}
+		return
+	}
+	logger.Info("[ml] recorded outcome: profit=%.2f%% profitable=%s", profitPct, was)
 }
 
 // runOptionsCheck runs the options check subprocess and returns the parsed result.

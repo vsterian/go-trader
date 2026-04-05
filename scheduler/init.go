@@ -249,6 +249,10 @@ type InitOptions struct {
 	DMLiveTrades            bool              // DM owner on live trade execution
 	TelegramDMPaper         bool              // Telegram: send on paper trade
 	TelegramDMLive          bool              // Telegram: send on live trade
+	MLEnabled               bool              `json:"mlEnabled,omitempty"`     // enable ML signal enhancement for all strategies
+	MLBuyBase               float64           `json:"mlBuyBase,omitempty"`     // ML buy threshold base (default 0.30)
+	MLSellBase              float64           `json:"mlSellBase,omitempty"`    // ML sell threshold base (default 0.70)
+	MLAdaptation            bool              `json:"mlAdaptation,omitempty"`  // enable ML adaptation/self-optimization
 }
 
 // generateConfig builds a Config from InitOptions. Pure function, no I/O.
@@ -558,6 +562,34 @@ func generateConfig(opts InitOptions) *Config {
 	if opts.CapitalPct > 0 {
 		for i := range cfg.Strategies {
 			cfg.Strategies[i].CapitalPct = opts.CapitalPct
+		}
+	}
+
+	// ML: Apply MLConfig to all spot/perps strategies when enabled.
+	if opts.MLEnabled {
+		buyBase := opts.MLBuyBase
+		if buyBase <= 0 {
+			buyBase = 0.30
+		}
+		sellBase := opts.MLSellBase
+		if sellBase <= 0 {
+			sellBase = 0.70
+		}
+		for i := range cfg.Strategies {
+			if cfg.Strategies[i].Type == "spot" || cfg.Strategies[i].Type == "perps" {
+				// Skip delta_neutral_funding — ML signal enhancement is direction-agnostic
+				if len(cfg.Strategies[i].Args) > 0 && cfg.Strategies[i].Args[0] == "delta_neutral_funding" {
+					continue
+				}
+				cfg.Strategies[i].MLConfig = &MLConfig{
+					Enabled:                true,
+					BuyThresholdBase:       buyBase,
+					SellThresholdBase:      sellBase,
+					StrongSignalMultiplier: 1.5,
+					AdaptationEnabled:      opts.MLAdaptation,
+					AdaptationIntervalH:    24,
+				}
+			}
 		}
 	}
 

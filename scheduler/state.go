@@ -20,6 +20,15 @@ type AppState struct {
 	CorrelationSnapshot *CorrelationSnapshot      `json:"correlation_snapshot,omitempty"`
 }
 
+// MLState tracks the ML model status for a strategy.
+type MLState struct {
+	IsModelTrained  bool      `json:"is_model_trained"`
+	TrainingSamples int       `json:"training_samples"`
+	LastOptimization time.Time `json:"last_optimization,omitempty"`
+	CurrentWinRate  float64   `json:"current_win_rate"`
+	AdaptationCount int       `json:"adaptation_count"`
+}
+
 // StrategyState is the per-strategy persistent state.
 type StrategyState struct {
 	ID              string                     `json:"id"`
@@ -31,6 +40,7 @@ type StrategyState struct {
 	OptionPositions map[string]*OptionPosition `json:"option_positions"`
 	TradeHistory    []Trade                    `json:"trade_history"`
 	RiskState       RiskState                  `json:"risk_state"`
+	MLState         *MLState                   `json:"ml_state,omitempty"`
 }
 
 func NewStrategyState(cfg StrategyConfig) *StrategyState {

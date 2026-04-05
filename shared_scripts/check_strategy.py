@@ -25,7 +25,20 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'shared_tools')
 def main():
     # Parse optional flags from argv before positional args
     htf_filter_enabled = "--htf-filter" in sys.argv
+    ml_enabled = "--ml-enabled" in sys.argv
     positional_args = [a for a in sys.argv[1:] if not a.startswith("--")]
+
+    # Extract key=value flags
+    def _flag_val(name, default=None):
+        prefix = f"--{name}="
+        for a in sys.argv[1:]:
+            if a.startswith(prefix):
+                return a[len(prefix):]
+        return default
+
+    ml_profit_pct = float(_flag_val("profit-pct", "0.0"))
+    ml_buy_base = float(_flag_val("ml-buy-base", "0.30"))
+    ml_sell_base = float(_flag_val("ml-sell-base", "0.70"))
 
     if len(positional_args) < 3:
         print(json.dumps({
@@ -121,6 +134,100 @@ def main():
             if signal != original_signal:
                 print(f"HTF filter: {original_signal} → {signal} (HTF trend={htf_info.get('htf_trend')})", file=sys.stderr)
 
+        # ── ML signal enhancement (opt-in) ────────────────────────────────
+        ml_block = None
+        if ml_enabled:
+            try:
+                from ml_signal_generator import MLSignalGenerator
+                from dynamic_thresholds import (
+                    calculate_dynamic_buy_threshold,
+                    calculate_dynamic_sell_threshold,
+                )
+                from indicators import calculate_adx
+
+                ml = MLSignalGenerator(symbol=symbol, model_dir=os.path.join(
+                    os.path.dirname(__file__), '..', 'models'))
+
+                # Gather indicator values from strategy output
+                rsi = float(last.get('rsi', 50))
+                adx_val = float(last.get('adx', 20))
+                upper_band = float(last.get('bb_upper', last.get('upper_band', price * 1.02)))
+                lower_band = float(last.get('bb_lower', last.get('lower_band', price * 0.98)))
+                rsi_threshold_buy = 30
+                rsi_threshold_sell = 70
+                adx_threshold = 25
+
+                # If ADX not in strategy output, compute it from data
+                if 'adx' not in [c.lower() for c in result_df.columns]:
+                    try:
+                        adx_series = calculate_adx(result_df)
+                        adx_val = float(adx_series.iloc[-1]) if not adx_series.empty else 20
+                    except Exception:
+                        adx_val = 20
+
+                stats = ml.get_performance_stats()
+                stats['is_trained'] = ml.is_trained
+
+                # Dynamic thresholds
+                buy_thresh = calculate_dynamic_buy_threshold(
+                    stats, price, rsi, adx_val, lower_band, upper_band,
+                    rsi_threshold_buy, adx_threshold,
+                )
+                sell_thresh = calculate_dynamic_sell_threshold(
+                    stats, price, rsi, adx_val, upper_band,
+                    current_profit_pct=ml_profit_pct,
+                    rsi_threshold_sell=rsi_threshold_sell,
+                    adx_threshold=adx_threshold,
+                )
+
+                # ML predictions
+                buy_prob = ml.predict_buy_signal(
+                    price, rsi, adx_val, lower_band, upper_band,
+                    rsi_threshold_buy, rsi_threshold_sell, adx_threshold,
+                )
+                sell_prob = ml.predict_sell_signal(
+                    price, rsi, adx_val, upper_band, lower_band,
+                    rsi_threshold_sell, rsi_threshold_buy, adx_threshold,
+                    current_profit_loss=ml_profit_pct,
+                )
+
+                # Apply ML to rule signal
+                rule_signal = signal
+                strong_mult = 1.5
+
+                if signal == 1:
+                    # Rule says BUY — ML must agree
+                    if buy_prob < buy_thresh:
+                        signal = 0  # ML blocks the buy
+                        print(f"ML: blocked BUY (prob={buy_prob:.3f} < thresh={buy_thresh:.3f})", file=sys.stderr)
+                elif signal == -1:
+                    # Rule says SELL — ML must agree
+                    if sell_prob < sell_thresh:
+                        signal = 0  # ML blocks the sell
+                        print(f"ML: blocked SELL (prob={sell_prob:.3f} < thresh={sell_thresh:.3f})", file=sys.stderr)
+                elif signal == 0:
+                    # No rule signal — check for strong ML override
+                    if buy_prob > buy_thresh * strong_mult:
+                        signal = 1  # Strong ML buy
+                        print(f"ML: strong BUY override (prob={buy_prob:.3f})", file=sys.stderr)
+                    elif sell_prob > sell_thresh * strong_mult:
+                        signal = -1  # Strong ML sell
+                        print(f"ML: strong SELL override (prob={sell_prob:.3f})", file=sys.stderr)
+
+                ml_block = {
+                    "enabled": True,
+                    "buy_probability": round(buy_prob, 4),
+                    "sell_probability": round(sell_prob, 4),
+                    "rule_signal": rule_signal,
+                    "dynamic_buy_threshold": round(buy_thresh, 4),
+                    "dynamic_sell_threshold": round(sell_thresh, 4),
+                    "model_trained": ml.is_trained,
+                    "training_samples": len(ml.training_features),
+                }
+            except Exception as e:
+                print(f"ML enhancement error: {e}", file=sys.stderr)
+                ml_block = {"enabled": True, "error": str(e)}
+
         # Collect relevant indicators
         indicators = {}
         indicator_cols = [c for c in result_df.columns
@@ -149,6 +256,8 @@ def main():
             "indicators": indicators,
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
+        if ml_block is not None:
+            output["ml"] = ml_block
         print(json.dumps(output))
 
     except Exception as e:

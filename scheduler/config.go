@@ -50,18 +50,19 @@ type CorrelationConfig struct {
 
 // Config is the top-level scheduler configuration.
 type Config struct {
-	ConfigVersion   int                        `json:"config_version,omitempty"` // bumped when new fields are added; 0/missing = v1 baseline
-	IntervalSeconds int                        `json:"interval_seconds"`
-	LogDir          string                     `json:"log_dir"`
-	StateFile       string                     `json:"state_file"`
-	StatusToken     string                     `json:"-"` // loaded from STATUS_AUTH_TOKEN env var only
-	Discord         DiscordConfig              `json:"discord"`
-	Telegram        TelegramConfig             `json:"telegram,omitempty"`
-	AutoUpdate      string                     `json:"auto_update,omitempty"` // "off", "daily", "heartbeat" (default: "off")
-	Strategies      []StrategyConfig           `json:"strategies"`
-	PortfolioRisk   *PortfolioRiskConfig       `json:"portfolio_risk,omitempty"`
-	Correlation     *CorrelationConfig         `json:"correlation,omitempty"`
-	Platforms       map[string]*PlatformConfig `json:"platforms,omitempty"`
+	ConfigVersion          int                        `json:"config_version,omitempty"` // bumped when new fields are added; 0/missing = v1 baseline
+	IntervalSeconds        int                        `json:"interval_seconds"`
+	LogDir                 string                     `json:"log_dir"`
+	StateFile              string                     `json:"state_file"`
+	StatusToken            string                     `json:"-"` // loaded from STATUS_AUTH_TOKEN env var only
+	Discord                DiscordConfig              `json:"discord"`
+	Telegram               TelegramConfig             `json:"telegram,omitempty"`
+	AutoUpdate             string                     `json:"auto_update,omitempty"` // "off", "daily", "heartbeat" (default: "off")
+	Strategies             []StrategyConfig           `json:"strategies"`
+	PortfolioRisk          *PortfolioRiskConfig       `json:"portfolio_risk,omitempty"`
+	Correlation            *CorrelationConfig         `json:"correlation,omitempty"`
+	Platforms              map[string]*PlatformConfig `json:"platforms,omitempty"`
+	AdaptationCheckCycles  int                        `json:"adaptation_check_cycles,omitempty"` // run ML adaptation every N cycles (default 60)
 }
 
 // ThetaHarvestConfig controls early exit on sold options.
@@ -70,6 +71,16 @@ type ThetaHarvestConfig struct {
 	ProfitTargetPct float64 `json:"profit_target_pct"` // Close sold options when this % of premium captured (e.g. 60)
 	StopLossPct     float64 `json:"stop_loss_pct"`     // Close if loss exceeds this % of premium (e.g. 200 = 2x premium)
 	MinDTEClose     float64 `json:"min_dte_close"`     // Force-close positions with fewer than N days to expiry
+}
+
+// MLConfig holds per-strategy ML signal enhancement settings.
+type MLConfig struct {
+	Enabled                bool    `json:"enabled"`
+	BuyThresholdBase       float64 `json:"buy_threshold_base"`        // default 0.30
+	SellThresholdBase      float64 `json:"sell_threshold_base"`       // default 0.70
+	StrongSignalMultiplier float64 `json:"strong_signal_multiplier"`  // default 1.5
+	AdaptationEnabled      bool    `json:"adaptation_enabled"`
+	AdaptationIntervalH    int     `json:"adaptation_interval_hours"` // default 24
 }
 
 // FuturesConfig holds per-contract futures trading parameters.
@@ -92,6 +103,7 @@ type StrategyConfig struct {
 	HTFFilter       bool                `json:"htf_filter,omitempty"`       // higher-timeframe trend filter
 	ThetaHarvest    *ThetaHarvestConfig `json:"theta_harvest,omitempty"`
 	FuturesConfig   *FuturesConfig      `json:"futures,omitempty"`
+	MLConfig        *MLConfig           `json:"ml_config,omitempty"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -105,6 +117,9 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if cfg.IntervalSeconds <= 0 {
 		cfg.IntervalSeconds = 600
+	}
+	if cfg.AdaptationCheckCycles <= 0 {
+		cfg.AdaptationCheckCycles = 60
 	}
 	if cfg.LogDir == "" {
 		cfg.LogDir = "logs"

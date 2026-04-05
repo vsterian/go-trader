@@ -109,6 +109,53 @@ def bollinger_bands(df: pd.DataFrame, period: int = 20, num_std: float = 2.0) ->
     return result
 
 
+def calculate_adx(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
+    """
+    Average Directional Index — measures trend strength regardless of direction.
+    Returns DataFrame with 'adx', 'plus_di', 'minus_di' columns added.
+    ADX > 25 indicates a strong trend; < 20 indicates weak/no trend.
+    """
+    result = df.copy()
+    high = result["high"]
+    low = result["low"]
+    close = result["close"]
+
+    # True Range
+    tr = pd.concat([
+        high - low,
+        (high - close.shift()).abs(),
+        (low - close.shift()).abs()
+    ], axis=1).max(axis=1)
+
+    # Directional Movement
+    up_move = high.diff()
+    down_move = -low.diff()  # positive when low decreases
+
+    plus_dm = pd.Series(0.0, index=df.index)
+    minus_dm = pd.Series(0.0, index=df.index)
+
+    # +DM: up_move > down_move AND up_move > 0
+    plus_mask = (up_move > down_move) & (up_move > 0)
+    plus_dm[plus_mask] = up_move[plus_mask]
+
+    # -DM: down_move > up_move AND down_move > 0
+    minus_mask = (down_move > up_move) & (down_move > 0)
+    minus_dm[minus_mask] = down_move[minus_mask]
+
+    atr = tr.rolling(window=period).mean()
+    plus_di = 100 * (plus_dm.rolling(window=period).mean() / atr)
+    minus_di = 100 * (minus_dm.rolling(window=period).mean() / atr)
+
+    dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di)
+    adx = dx.rolling(window=period).mean()
+
+    result["adx"] = adx
+    result["plus_di"] = plus_di
+    result["minus_di"] = minus_di
+
+    return result
+
+
 if __name__ == "__main__":
     # Quick test with synthetic data
     np.random.seed(42)

@@ -10,7 +10,7 @@ import (
 
 // CurrentConfigVersion is the version embedded in newly generated configs.
 // When the binary starts and cfg.ConfigVersion < CurrentConfigVersion, migration runs.
-const CurrentConfigVersion = 4
+const CurrentConfigVersion = 5
 
 // ConfigField describes a config field introduced in a specific version.
 type ConfigField struct {
@@ -64,6 +64,13 @@ var configFieldRegistry = []ConfigField{
 		Description: "Send a Telegram message on every paper trade execution (true/false).",
 		Default:     "false",
 		FieldType:   "bool",
+	},
+	{
+		Version:     5,
+		JSONPath:    "adaptation_check_cycles",
+		Description: "Number of cycles between ML adaptation checks (0 = disabled). Default 60 (~1 check per day with 1h interval).",
+		Default:     "60",
+		FieldType:   "int",
 	},
 }
 
