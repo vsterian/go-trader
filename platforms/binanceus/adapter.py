@@ -26,7 +26,7 @@ def _get_ccxt_exchange(authenticated=False):
         if api_key and api_secret:
             config["apiKey"] = api_key
             config["secret"] = api_secret
-    return ccxt.binanceus(config)
+    return ccxt.binance(config)
 
 
 class BinanceUSExchangeAdapter:
@@ -41,7 +41,10 @@ class BinanceUSExchangeAdapter:
         api_key = _os.environ.get("BINANCE_API_KEY", "")
         api_secret = _os.environ.get("BINANCE_API_SECRET", "")
         self._is_live = bool(api_key and api_secret)
-        self._exchange = _get_ccxt_exchange(authenticated=self._is_live)
+        # Public exchange for market data (no auth needed — avoids auth errors on price fetches)
+        self._public_exchange = _get_ccxt_exchange(authenticated=False)
+        # Authenticated exchange for order placement (only created in live mode)
+        self._exchange = _get_ccxt_exchange(authenticated=self._is_live) if self._is_live else self._public_exchange
         self._markets_loaded = False
 
     @property
@@ -62,7 +65,7 @@ class BinanceUSExchangeAdapter:
 
     def _load_markets(self):
         if not self._markets_loaded:
-            self._exchange.load_markets()
+            self._public_exchange.load_markets()
             self._markets_loaded = True
 
     def _resolve_pair(self, symbol: str) -> str:
@@ -72,15 +75,15 @@ class BinanceUSExchangeAdapter:
         for suffix in ("/USDT", "/USD", "/USDC"):
             pair = symbol + suffix
             self._load_markets()
-            if pair in self._exchange.markets:
+            if pair in self._public_exchange.markets:
                 return pair
         return symbol + "/USDT"
 
     def get_spot_price(self, underlying: str) -> float:
-        """Fetch current spot price for underlying via BinanceUS."""
+        """Fetch current spot price for underlying via BinanceUS public API."""
         for suffix in ("/USDT", "/USD", "/USDC"):
             try:
-                ticker = self._exchange.fetch_ticker(underlying + suffix)
+                ticker = self._public_exchange.fetch_ticker(underlying + suffix)
                 price = ticker.get("last") or 0
                 if price and price > 0:
                     return float(price)
@@ -97,7 +100,7 @@ class BinanceUSExchangeAdapter:
         try:
             self._load_markets()
             pair = self._resolve_pair(symbol)
-            market = self._exchange.markets.get(pair, {})
+            market = self._public_exchange.markets.get(pair, {})
             limits = market.get("limits", {})
             cost_min = (limits.get("cost") or {}).get("min")
             if cost_min and float(cost_min) > 0:
@@ -112,7 +115,7 @@ class BinanceUSExchangeAdapter:
         try:
             self._load_markets()
             pair = self._resolve_pair(symbol)
-            market = self._exchange.markets.get(pair, {})
+            market = self._public_exchange.markets.get(pair, {})
             limits = market.get("limits", {})
             precision = market.get("precision", {})
             amount_limits = limits.get("amount") or {}
@@ -203,7 +206,7 @@ class BinanceUSExchangeAdapter:
     def get_vol_metrics(self, underlying: str) -> Tuple[float, float]:
         """Compute 14-day historical vol and IV rank from daily OHLCV."""
         try:
-            ohlcv = self._exchange.fetch_ohlcv(underlying + "/USDT", "1d", limit=90)
+            ohlcv = self._public_exchange.fetch_ohlcv(underlying + "/USDT", "1d", limit=90)
             if not ohlcv or len(ohlcv) < 15:
                 return 0.60, 50.0
             closes = [c[4] for c in ohlcv]
