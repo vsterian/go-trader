@@ -121,10 +121,10 @@ class BinanceUSExchangeAdapter:
             amount_limits = limits.get("amount") or {}
             min_qty = amount_limits.get("min")
             max_qty = amount_limits.get("max")
-            # step_size from precision
+            # ccxt returns precision.amount as the actual step size value (e.g. 0.0001)
             amount_prec = precision.get("amount")
-            if amount_prec is not None:
-                step_size = 10 ** (-int(amount_prec))
+            if amount_prec is not None and float(amount_prec) > 0:
+                step_size = float(amount_prec)
             else:
                 step_size = defaults["step_size"]
             return {
