@@ -514,13 +514,13 @@ type BinanceUSExecuteResult struct {
 	Error     string              `json:"error,omitempty"`
 }
 
-// RunBinanceUSExecute runs check_strategy.py in execute mode for live BinanceUS orders.
-func RunBinanceUSExecute(script, symbol, side string, size float64) (*BinanceUSExecuteResult, string, error) {
+// RunBinanceUSExecute runs check_strategy.py in execute mode for live Binance orders.
+// Size is determined by the Python script based on real exchange balance.
+func RunBinanceUSExecute(script, symbol, side string) (*BinanceUSExecuteResult, string, error) {
 	args := []string{
 		"--execute",
 		fmt.Sprintf("--symbol=%s", symbol),
 		fmt.Sprintf("--side=%s", side),
-		fmt.Sprintf("--size=%g", size),
 		"--mode=live",
 	}
 	stdout, stderr, err := RunPythonScript(script, args)

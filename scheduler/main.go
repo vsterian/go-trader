@@ -459,16 +459,6 @@ func main() {
 							}
 						}
 					}
-					var busCash float64
-					var busPosQty float64
-					if sc.Platform == "binanceus" && binanceusIsLive(sc.Args) {
-						busCash = stratState.Cash
-						if sym := binanceusSymbol(sc.Args); sym != "" {
-							if pos, ok := stratState.Positions[sym]; ok {
-								busPosQty = pos.Quantity
-							}
-						}
-					}
 					// ML: compute current position profit % for dynamic sell threshold
 					var mlProfitPct float64
 					if sc.MLConfig != nil && sc.MLConfig.Enabled && sc.Type == "spot" {
@@ -559,7 +549,7 @@ func main() {
 								var execResult *BinanceUSExecuteResult
 								liveExecFailed := false
 								if result.Signal != 0 {
-									if er, ok2 := runBinanceUSExecuteOrder(sc, result, price, busCash, busPosQty, logger); ok2 {
+									if er, ok2 := runBinanceUSExecuteOrder(sc, result, price, logger); ok2 {
 										execResult = er
 									} else {
 										liveExecFailed = true
@@ -1774,44 +1764,28 @@ return args[1]
 return ""
 }
 
-// runBinanceUSExecuteOrder places a live market order on BinanceUS (Phase 3, no lock).
-func runBinanceUSExecuteOrder(sc StrategyConfig, result *SpotResult, price, cash, posQty float64, logger *StrategyLogger) (*BinanceUSExecuteResult, bool) {
-isBuy := result.Signal == 1
-var size float64
-if isBuy {
-budget := cash * 0.95
-if budget < 1 || price <= 0 {
-logger.Info("Insufficient cash ($%.2f) for live buy", cash)
-return nil, false
-}
-size = budget / price
-} else {
-if posQty <= 0 {
-logger.Info("No position to close for %s", result.Symbol)
-return nil, false
-}
-size = posQty
-}
+// runBinanceUSExecuteOrder places a live market order on Binance (Phase 3, no lock).
+// Python script queries real exchange balance to compute buy size; sells use full asset balance.
+func runBinanceUSExecuteOrder(sc StrategyConfig, result *SpotResult, price float64, logger *StrategyLogger) (*BinanceUSExecuteResult, bool) {
+	side := "buy"
+	if result.Signal != 1 {
+		side = "sell"
+	}
+	logger.Info("Placing live Binance %s %s (balance-based sizing)", side, result.Symbol)
 
-side := "buy"
-if !isBuy {
-side = "sell"
-}
-logger.Info("Placing live BinanceUS %s %s size=%.6f", side, result.Symbol, size)
-
-execResult, stderr, err := RunBinanceUSExecute(sc.Script, result.Symbol, side, size)
-if stderr != "" {
-logger.Info("execute stderr: %s", stderr)
-}
-if err != nil {
-logger.Error("Live execute failed: %v", err)
-return nil, false
-}
-if execResult.Error != "" {
-logger.Error("Live execute returned error: %s", execResult.Error)
-return nil, false
-}
-return execResult, true
+	execResult, stderr, err := RunBinanceUSExecute(sc.Script, result.Symbol, side)
+	if stderr != "" {
+		logger.Info("execute stderr: %s", stderr)
+	}
+	if err != nil {
+		logger.Error("Live execute failed: %v", err)
+		return nil, false
+	}
+	if execResult.Error != "" {
+		logger.Error("Live execute returned error: %s", execResult.Error)
+		return nil, false
+	}
+	return execResult, true
 }
 
 // executeBinanceUSResult applies a BinanceUS live result to state. Must be called under Lock.

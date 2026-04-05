@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'shared_tools')
 
 
 def run_execute():
-    """Execute a live market order on BinanceUS."""
+    """Execute a live market order on Binance using real exchange balance."""
     def _flag_val(name, default=None):
         prefix = f"--{name}="
         for a in sys.argv[1:]:
@@ -35,15 +35,15 @@ def run_execute():
 
     symbol = _flag_val("symbol")
     side = _flag_val("side")
-    size = float(_flag_val("size", "0"))
+    size_str = _flag_val("size", "0")
     mode = _flag_val("mode", "paper")
 
     if mode != "live":
         print(json.dumps({"error": "--execute requires --mode=live", "platform": "binanceus"}))
         sys.exit(1)
 
-    if not symbol or not side or size <= 0:
-        print(json.dumps({"error": "missing --symbol, --side, or --size", "platform": "binanceus"}))
+    if not symbol or not side:
+        print(json.dumps({"error": "missing --symbol or --side", "platform": "binanceus"}))
         sys.exit(1)
 
     try:
@@ -67,6 +67,36 @@ def run_execute():
             print(json.dumps({"error": f"could not fetch price for {symbol}", "platform": "binanceus"}))
             sys.exit(1)
 
+        is_buy = side.lower() == "buy"
+
+        if is_buy:
+            # Query real Binance balance and compute size from it
+            usdc_balance = adapter.get_balance("USDC")
+            budget = usdc_balance * 0.95  # 95% of available balance, keep 5% reserve
+            if budget < adapter.MIN_NOTIONAL_FLOOR:
+                print(json.dumps({
+                    "error": f"insufficient USDC balance: ${usdc_balance:.2f} (need >${adapter.MIN_NOTIONAL_FLOOR:.0f})",
+                    "platform": "binanceus",
+                    "execution": None,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }))
+                sys.exit(1)
+            size = budget / price
+            sys.stderr.write(f"Balance: ${usdc_balance:.2f} USDC → budget ${budget:.2f} → size {size:.8f} {underlying}\n")
+        else:
+            # For sells, query real asset balance on exchange
+            asset_balance = adapter.get_balance(underlying)
+            if asset_balance <= 0:
+                print(json.dumps({
+                    "error": f"no {underlying} balance to sell (0.00)",
+                    "platform": "binanceus",
+                    "execution": None,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }))
+                sys.exit(1)
+            size = asset_balance
+            sys.stderr.write(f"Selling full {underlying} balance: {size:.8f}\n")
+
         # Validate order: min notional + lot size
         adj_size, err = adapter.validate_order(symbol, size, price)
         if err:
@@ -78,7 +108,6 @@ def run_execute():
             }))
             sys.exit(1)
 
-        is_buy = side.lower() == "buy"
         if is_buy:
             result = adapter.market_buy(symbol, adj_size)
         else:
