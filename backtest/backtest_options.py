@@ -18,7 +18,7 @@ def fetch_historical_data(underlying: str, since: str, timeframe: str = "1d") ->
     """Fetch historical OHLCV data from Binance US."""
     import ccxt
     exchange = ccxt.binanceus({"enableRateLimit": True})
-    symbol = f"{underlying}/USDT"
+    symbol = f"{underlying}/USDC"
     
     since_ts = exchange.parse8601(f"{since}T00:00:00Z")
     all_candles = []

@@ -3,7 +3,7 @@
 Quick price fetcher for the Go scheduler.
 Fetches current prices for given symbols.
 
-Usage: python3 check_price.py BTC/USDT SOL/USDT
+Usage: python3 check_price.py BTC/USDC SOL/USDC
 """
 
 import sys

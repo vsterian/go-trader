@@ -8,7 +8,7 @@ Adapted for go-trader's stateless subprocess model:
   - No Config() singleton — all params passed via constructor
 
 Usage (within check_strategy.py):
-    ml = MLSignalGenerator("BTC_USDT")
+    ml = MLSignalGenerator("BTC_USDC")
     buy_prob = ml.predict_buy_signal(price, rsi, adx, lower, upper, 30, 70, 25)
     sell_prob = ml.predict_sell_signal(price, rsi, adx, upper, lower, 70, 30, 25, pnl)
 """

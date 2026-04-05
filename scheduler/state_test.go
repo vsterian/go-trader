@@ -89,10 +89,10 @@ func TestSaveAndLoadStateRoundTrip(t *testing.T) {
 		Cash:           950.5,
 		InitialCapital: 1000,
 		Positions: map[string]*Position{
-			"BTC/USDT": {Symbol: "BTC/USDT", Quantity: 0.01, AvgCost: 50000, Side: "long"},
+			"BTC/USDC": {Symbol: "BTC/USDC", Quantity: 0.01, AvgCost: 50000, Side: "long"},
 		},
 		OptionPositions: make(map[string]*OptionPosition),
-		TradeHistory:    []Trade{{StrategyID: "test-btc", Symbol: "BTC/USDT", Side: "buy"}},
+		TradeHistory:    []Trade{{StrategyID: "test-btc", Symbol: "BTC/USDC", Side: "buy"}},
 	}
 
 	if err := SaveState(path, state); err != nil {
@@ -114,9 +114,9 @@ func TestSaveAndLoadStateRoundTrip(t *testing.T) {
 	if s.Cash != 950.5 {
 		t.Errorf("Cash = %g, want 950.5", s.Cash)
 	}
-	pos := s.Positions["BTC/USDT"]
+	pos := s.Positions["BTC/USDC"]
 	if pos == nil {
-		t.Fatal("Position BTC/USDT not found")
+		t.Fatal("Position BTC/USDC not found")
 	}
 	if pos.Quantity != 0.01 {
 		t.Errorf("Quantity = %g, want 0.01", pos.Quantity)
@@ -243,9 +243,9 @@ func TestValidateState(t *testing.T) {
 		InitialCapital: -100, // invalid
 		Cash:           -50,  // negative
 		Positions: map[string]*Position{
-			"BTC/USDT": {Quantity: 0.01, Side: "long"},
-			"ETH/USDT": {Quantity: 0, Side: "long"},   // invalid: zero
-			"SOL/USDT": {Quantity: -1, Side: "short"}, // invalid: negative
+			"BTC/USDC": {Quantity: 0.01, Side: "long"},
+			"ETH/USDC": {Quantity: 0, Side: "long"},   // invalid: zero
+			"SOL/USDC": {Quantity: -1, Side: "short"}, // invalid: negative
 		},
 		OptionPositions: map[string]*OptionPosition{
 			"valid":   {Action: "buy", OptionType: "call", Quantity: 1},
@@ -265,13 +265,13 @@ func TestValidateState(t *testing.T) {
 	if s.Cash != 0 {
 		t.Errorf("Cash should be clamped to 0, got %g", s.Cash)
 	}
-	if _, ok := s.Positions["BTC/USDT"]; !ok {
-		t.Error("valid position BTC/USDT should remain")
+	if _, ok := s.Positions["BTC/USDC"]; !ok {
+		t.Error("valid position BTC/USDC should remain")
 	}
-	if _, ok := s.Positions["ETH/USDT"]; ok {
+	if _, ok := s.Positions["ETH/USDC"]; ok {
 		t.Error("zero-quantity position should be removed")
 	}
-	if _, ok := s.Positions["SOL/USDT"]; ok {
+	if _, ok := s.Positions["SOL/USDC"]; ok {
 		t.Error("negative-quantity position should be removed")
 	}
 	if _, ok := s.OptionPositions["valid"]; !ok {

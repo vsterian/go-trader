@@ -15,24 +15,24 @@ from correlation_analyzer import check_correlation, compute_correlation
 
 class TestCheckCorrelation:
     def test_empty_existing_positions(self):
-        result = check_correlation('BTC/USDT', [])
+        result = check_correlation('BTC/USDC', [])
         assert result['blocked'] is False
         assert result['correlations'] == {}
 
     def test_same_symbol_not_counted(self):
         """If new symbol is already in existing, skip self-correlation."""
         # This would normally need data_fetcher — mock via monkeypatch
-        result = check_correlation('BTC/USDT', ['BTC/USDT'])
+        result = check_correlation('BTC/USDC', ['BTC/USDC'])
         assert result['blocked'] is False
         assert result['correlations'] == {}
 
     def test_result_structure(self):
-        result = check_correlation('ETH/USDT', [])
+        result = check_correlation('ETH/USDC', [])
         assert 'symbol' in result
         assert 'blocked' in result
         assert 'reason' in result
         assert 'correlations' in result
-        assert result['symbol'] == 'ETH/USDT'
+        assert result['symbol'] == 'ETH/USDC'
 
 
 class TestComputeCorrelation:
@@ -64,7 +64,7 @@ class TestComputeCorrelation:
             os.remove(cache_file)
 
         # Test high correlation
-        corr = compute_correlation('BTC/USDT', 'ETH/USDT')
+        corr = compute_correlation('BTC/USDC', 'ETH/USDC')
         assert corr > 0.7, f"Expected high correlation, got {corr}"
 
     def test_check_blocks_correlated(self, monkeypatch):
@@ -92,9 +92,9 @@ class TestComputeCorrelation:
         if os.path.exists(cache_file):
             os.remove(cache_file)
 
-        result = check_correlation('ETH/USDT', ['BTC/USDT'], threshold=0.7)
+        result = check_correlation('ETH/USDC', ['BTC/USDC'], threshold=0.7)
         assert result['blocked'] is True
-        assert 'BTC/USDT' in result['correlations']
+        assert 'BTC/USDC' in result['correlations']
 
     def test_check_allows_uncorrelated(self, monkeypatch):
         """Uncorrelated data should not block."""
@@ -121,10 +121,10 @@ class TestComputeCorrelation:
         if os.path.exists(cache_file):
             os.remove(cache_file)
 
-        result = check_correlation('ETH/USDT', ['BTC/USDT'], threshold=0.7)
+        result = check_correlation('ETH/USDC', ['BTC/USDC'], threshold=0.7)
         # May or may not be blocked depending on random seed — just check structure
         assert 'blocked' in result
-        assert 'BTC/USDT' in result['correlations']
+        assert 'BTC/USDC' in result['correlations']
 
 
 class TestCompile:

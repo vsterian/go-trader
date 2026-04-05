@@ -11,13 +11,13 @@ import (
 // asset represents a tradeable asset with its exchange symbol.
 type asset struct {
 	Name   string // e.g. "BTC"
-	Symbol string // e.g. "BTC/USDT"
+	Symbol string // e.g. "BTC/USDC"
 }
 
 var supportedAssets = []asset{
-	{Name: "BTC", Symbol: "BTC/USDT"},
-	{Name: "ETH", Symbol: "ETH/USDT"},
-	{Name: "SOL", Symbol: "SOL/USDT"},
+	{Name: "BTC", Symbol: "BTC/USDC"},
+	{Name: "ETH", Symbol: "ETH/USDC"},
+	{Name: "SOL", Symbol: "SOL/USDC"},
 }
 
 // stratDef defines a strategy template with its ID and short name for config IDs.

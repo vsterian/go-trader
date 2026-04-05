@@ -229,10 +229,10 @@ def generate_full_report(
 if __name__ == "__main__":
     # Test with dummy data
     dummy = [
-        {"strategy_name": "sma_crossover", "symbol": "BTC/USDT", "total_return_pct": 15.2,
+        {"strategy_name": "sma_crossover", "symbol": "BTC/USDC", "total_return_pct": 15.2,
          "sharpe_ratio": 1.2, "sortino_ratio": 1.8, "max_drawdown_pct": -12.5,
          "win_rate": 55.0, "profit_factor": 1.4, "total_trades": 20},
-        {"strategy_name": "rsi", "symbol": "BTC/USDT", "total_return_pct": 8.5,
+        {"strategy_name": "rsi", "symbol": "BTC/USDC", "total_return_pct": 8.5,
          "sharpe_ratio": 0.9, "sortino_ratio": 1.1, "max_drawdown_pct": -18.3,
          "win_rate": 48.0, "profit_factor": 1.1, "total_trades": 35},
     ]

@@ -73,7 +73,7 @@ class TestFetchOhlcv:
     @patch("data_fetcher.get_exchange")
     def test_returns_dataframe_with_expected_columns(self, mock_get_ex):
         mock_get_ex.return_value = _make_mock_exchange()
-        df = fetch_ohlcv("BTC/USDT", "1h", limit=5, store=False)
+        df = fetch_ohlcv("BTC/USDC", "1h", limit=5, store=False)
 
         assert isinstance(df, pd.DataFrame)
         for col in ("timestamp", "open", "high", "low", "close", "volume"):
@@ -83,14 +83,14 @@ class TestFetchOhlcv:
     @patch("data_fetcher.get_exchange")
     def test_datetime_index(self, mock_get_ex):
         mock_get_ex.return_value = _make_mock_exchange()
-        df = fetch_ohlcv("BTC/USDT", "1h", limit=5, store=False)
+        df = fetch_ohlcv("BTC/USDC", "1h", limit=5, store=False)
         assert df.index.name == "datetime"
 
     @patch("data_fetcher.get_exchange")
     def test_since_parameter_parsed(self, mock_get_ex):
         mock_ex = _make_mock_exchange()
         mock_get_ex.return_value = mock_ex
-        fetch_ohlcv("BTC/USDT", "1d", since="2024-01-01", limit=5, store=False)
+        fetch_ohlcv("BTC/USDC", "1d", since="2024-01-01", limit=5, store=False)
 
         # parse8601 should have been called with the ISO string
         mock_ex.parse8601.assert_called_once_with("2024-01-01T00:00:00Z")
@@ -102,7 +102,7 @@ class TestFetchOhlcv:
     def test_empty_response_returns_empty_df(self, mock_get_ex):
         mock_ex = _make_mock_exchange(candles=[])
         mock_get_ex.return_value = mock_ex
-        df = fetch_ohlcv("BTC/USDT", "1h", limit=5, store=False)
+        df = fetch_ohlcv("BTC/USDC", "1h", limit=5, store=False)
         assert len(df) == 0
         assert "timestamp" in df.columns
 
@@ -110,14 +110,14 @@ class TestFetchOhlcv:
     @patch("data_fetcher.store_ohlcv")
     def test_store_called_when_enabled(self, mock_store, mock_get_ex):
         mock_get_ex.return_value = _make_mock_exchange()
-        fetch_ohlcv("BTC/USDT", "1h", limit=5, store=True)
+        fetch_ohlcv("BTC/USDC", "1h", limit=5, store=True)
         mock_store.assert_called_once()
 
     @patch("data_fetcher.get_exchange")
     @patch("data_fetcher.store_ohlcv")
     def test_store_not_called_when_disabled(self, mock_store, mock_get_ex):
         mock_get_ex.return_value = _make_mock_exchange()
-        fetch_ohlcv("BTC/USDT", "1h", limit=5, store=False)
+        fetch_ohlcv("BTC/USDC", "1h", limit=5, store=False)
         mock_store.assert_not_called()
 
 
@@ -142,7 +142,7 @@ class TestFetchFullHistory:
         mock_ex.milliseconds.return_value = 1700100000000  # future of the data
         mock_get_ex.return_value = mock_ex
 
-        df = fetch_full_history("BTC/USDT", "1h", since="2023-11-14", store=False)
+        df = fetch_full_history("BTC/USDC", "1h", since="2023-11-14", store=False)
         assert len(df) == 3
         assert mock_ex.fetch_ohlcv.call_count == 2
 
@@ -166,7 +166,7 @@ class TestFetchFullHistory:
         mock_ex.milliseconds.return_value = 1700100000000
         mock_get_ex.return_value = mock_ex
 
-        df = fetch_full_history("BTC/USDT", "1h", since="2023-11-14", store=False)
+        df = fetch_full_history("BTC/USDC", "1h", since="2023-11-14", store=False)
         assert len(df) == 3  # 3 unique timestamps
 
     @patch("data_fetcher.get_exchange")
@@ -178,7 +178,7 @@ class TestFetchFullHistory:
         mock_ex.milliseconds.return_value = 1700100000000
         mock_get_ex.return_value = mock_ex
 
-        df = fetch_full_history("BTC/USDT", "1h", since="2023-11-14", store=False)
+        df = fetch_full_history("BTC/USDC", "1h", since="2023-11-14", store=False)
         assert len(df) == 0
 
     @patch("data_fetcher.get_exchange")
@@ -196,7 +196,7 @@ class TestFetchFullHistory:
         mock_ex.milliseconds.return_value = 1700100000000
         mock_get_ex.return_value = mock_ex
 
-        df = fetch_full_history("BTC/USDT", "1h", since="2023-11-14", store=False)
+        df = fetch_full_history("BTC/USDC", "1h", since="2023-11-14", store=False)
         assert len(df) == 2
 
     @patch("data_fetcher.get_exchange")
@@ -213,7 +213,7 @@ class TestFetchFullHistory:
         mock_ex.milliseconds.return_value = 1700100000000
         mock_get_ex.return_value = mock_ex
 
-        df = fetch_full_history("BTC/USDT", "1h", since="2023-11-14", store=False)
+        df = fetch_full_history("BTC/USDC", "1h", since="2023-11-14", store=False)
         assert len(df) == 2
 
     @patch("data_fetcher.get_exchange")
@@ -226,7 +226,7 @@ class TestFetchFullHistory:
         mock_ex.milliseconds.return_value = 1700100000000
         mock_get_ex.return_value = mock_ex
 
-        df = fetch_full_history("BTC/USDT", "1h", since="2023-11-14", store=False)
+        df = fetch_full_history("BTC/USDC", "1h", since="2023-11-14", store=False)
         assert len(df) == 0
         assert mock_ex.fetch_ohlcv.call_count == 5
 
@@ -243,7 +243,7 @@ class TestFetchFullHistory:
         mock_ex.rateLimit = 100
         mock_get_ex.return_value = mock_ex
 
-        df = fetch_full_history("BTC/USDT", "1h", since="2023-11-14", store=False)
+        df = fetch_full_history("BTC/USDC", "1h", since="2023-11-14", store=False)
         # Should break after first call since last_ts == current_since
         assert mock_ex.fetch_ohlcv.call_count == 1
 
@@ -266,7 +266,7 @@ class TestLoadCachedData:
         cached_df.set_index("datetime", inplace=True)
         mock_load.return_value = cached_df
 
-        df = load_cached_data("BTC/USDT", "1d")
+        df = load_cached_data("BTC/USDC", "1d")
         assert len(df) == 1
         mock_fetch.assert_not_called()
 
@@ -283,7 +283,7 @@ class TestLoadCachedData:
             "volume": [100],
         })
 
-        df = load_cached_data("BTC/USDT", "1d")
+        df = load_cached_data("BTC/USDC", "1d")
         mock_fetch.assert_called_once()
 
     @patch("data_fetcher.load_ohlcv")
@@ -298,7 +298,7 @@ class TestLoadCachedData:
             "datetime": [pd.Timestamp("2023-11-14")],
         }).set_index("datetime")
 
-        load_cached_data("BTC/USDT", "1d", start_date="2023-01-01", end_date="2024-01-01")
+        load_cached_data("BTC/USDC", "1d", start_date="2023-01-01", end_date="2024-01-01")
 
         call_args = mock_load.call_args
         # Should pass start_ts and end_ts

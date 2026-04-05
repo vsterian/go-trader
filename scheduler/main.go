@@ -1766,7 +1766,7 @@ return true
 return false
 }
 
-// binanceusSymbol extracts the symbol from BinanceUS strategy args (e.g. "BTC/USDT").
+// binanceusSymbol extracts the symbol from BinanceUS strategy args (e.g. "BTC/USDC").
 func binanceusSymbol(args []string) string {
 if len(args) >= 2 {
 return args[1]

@@ -78,7 +78,7 @@ class OKXExchangeAdapter:
 
     def get_spot_price(self, symbol: str) -> float:
         """Get current spot price for a coin (e.g. 'BTC')."""
-        for suffix in ("/USDT", "/USD", "/USDC"):
+        for suffix in ("/USDC", "/USD", "/USDC"):
             try:
                 ticker = self._exchange.fetch_ticker(symbol + suffix)
                 price = ticker.get("last") or 0
@@ -95,7 +95,7 @@ class OKXExchangeAdapter:
         interval: "1m", "5m", "15m", "30m", "1h", "2h", "4h", "1d", etc.
         Returns list of [timestamp_ms, open, high, low, close, volume].
         """
-        pair = f"{symbol}/USDT"
+        pair = f"{symbol}/USDC"
         try:
             candles = self._exchange.fetch_ohlcv(pair, interval, limit=limit)
             return candles  # ccxt already returns [ts, o, h, l, c, v]
@@ -108,8 +108,8 @@ class OKXExchangeAdapter:
         return [c[4] for c in candles] if candles else []
 
     def get_perp_ohlcv(self, symbol: str, interval: str = "1h", limit: int = 200) -> list:
-        """Fetch OHLCV candles for perpetual swap (USDT-margined)."""
-        pair = f"{symbol}/USDT:USDT"
+        """Fetch OHLCV candles for perpetual swap (USDC-margined)."""
+        pair = f"{symbol}/USDC:USDC"
         try:
             candles = self._exchange.fetch_ohlcv(pair, interval, limit=limit)
             return candles
@@ -122,7 +122,7 @@ class OKXExchangeAdapter:
         Returns the raw rate as a float (e.g. 0.0001 = 0.01% per 8h).
         """
         try:
-            pair = f"{symbol}/USDT:USDT"
+            pair = f"{symbol}/USDC:USDC"
             data = self._exchange.fetch_funding_rate(pair)
             return float(data.get("fundingRate", 0) or 0)
         except Exception:
@@ -134,7 +134,7 @@ class OKXExchangeAdapter:
         Returns list of {"rate": float, "time": int} dicts, newest last.
         """
         try:
-            pair = f"{symbol}/USDT:USDT"
+            pair = f"{symbol}/USDC:USDC"
             since = int((time.time() - days * 86400) * 1000)
             records = self._exchange.fetch_funding_rate_history(pair, since=since)
             return [
@@ -161,10 +161,10 @@ class OKXExchangeAdapter:
             )
         side = "buy" if is_buy else "sell"
         if inst_type == "swap":
-            pair = f"{symbol}/USDT:USDT"
+            pair = f"{symbol}/USDC:USDC"
             params = {"tdMode": "cross"}
         else:
-            pair = f"{symbol}/USDT"
+            pair = f"{symbol}/USDC"
             params = {"tdMode": "cash"}
         return self._exchange.create_market_order(pair, side, size, params=params)
 
@@ -177,7 +177,7 @@ class OKXExchangeAdapter:
             raise RuntimeError(
                 "market_close requires live mode (set OKX_API_KEY, OKX_API_SECRET, OKX_PASSPHRASE)"
             )
-        pair = f"{symbol}/USDT:USDT"
+        pair = f"{symbol}/USDC:USDC"
         positions = self._exchange.fetch_positions([pair])
         for pos in positions:
             contracts = float(pos.get("contracts", 0) or 0)
@@ -197,7 +197,7 @@ class OKXExchangeAdapter:
     def get_vol_metrics(self, underlying: str) -> Tuple[float, float]:
         """Compute 14-day historical vol and IV rank from daily OHLCV."""
         try:
-            ohlcv = self._exchange.fetch_ohlcv(underlying + "/USDT", "1d", limit=90)
+            ohlcv = self._exchange.fetch_ohlcv(underlying + "/USDC", "1d", limit=90)
             if not ohlcv or len(ohlcv) < 15:
                 return 0.60, 50.0
             closes = [c[4] for c in ohlcv]

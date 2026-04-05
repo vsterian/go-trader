@@ -168,13 +168,13 @@ func TestOKXInstType(t *testing.T) {
 }
 
 func TestBinanceusIsLive(t *testing.T) {
-if binanceusIsLive([]string{"sma", "BTC/USDT", "1h", "--mode=live"}) != true {
+if binanceusIsLive([]string{"sma", "BTC/USDC", "1h", "--mode=live"}) != true {
 t.Error("expected true for --mode=live")
 }
-if binanceusIsLive([]string{"sma", "BTC/USDT", "1h"}) != false {
+if binanceusIsLive([]string{"sma", "BTC/USDC", "1h"}) != false {
 t.Error("expected false without --mode=live")
 }
-if binanceusIsLive([]string{"sma", "BTC/USDT", "1h", "--mode=paper"}) != false {
+if binanceusIsLive([]string{"sma", "BTC/USDC", "1h", "--mode=paper"}) != false {
 t.Error("expected false for --mode=paper")
 }
 }
@@ -184,10 +184,10 @@ cases := []struct {
 args []string
 want string
 }{
-{[]string{"sma", "BTC/USDT", "1h"}, "BTC/USDT"},
+{[]string{"sma", "BTC/USDC", "1h"}, "BTC/USDC"},
 {[]string{"rsi"}, ""},
 {[]string{}, ""},
-{[]string{"momentum", "ETH/USDT", "1h", "--mode=live"}, "ETH/USDT"},
+{[]string{"momentum", "ETH/USDC", "1h", "--mode=live"}, "ETH/USDC"},
 }
 
 for _, tc := range cases {
@@ -207,7 +207,7 @@ Cash:           1000,
 Positions:      map[string]*Position{},
 }
 sc := StrategyConfig{ID: "sma-btc", Platform: "binanceus", Type: "spot"}
-result := &SpotResult{Signal: 1, Symbol: "BTC/USDT"}
+result := &SpotResult{Signal: 1, Symbol: "BTC/USDC"}
 execResult := &BinanceUSExecuteResult{
 Execution: &BinanceUSExecution{
 Action: "buy", Symbol: "BTC", Size: 0.015,
@@ -239,7 +239,7 @@ Cash:           1000,
 Positions:      map[string]*Position{},
 }
 sc := StrategyConfig{ID: "sma-btc", Platform: "binanceus", Type: "spot"}
-result := &SpotResult{Signal: 1, Symbol: "BTC/USDT"}
+result := &SpotResult{Signal: 1, Symbol: "BTC/USDC"}
 logger := &StrategyLogger{stratID: "sma-btc", writer: os.Stdout}
 
 // nil execResult = paper mode — should NOT have LIVE prefix

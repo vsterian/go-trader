@@ -274,7 +274,7 @@ func TestGenerateConfig_SpotScriptAndArgs(t *testing.T) {
 	if s.Script != "shared_scripts/check_strategy.py" {
 		t.Errorf("expected check_strategy.py, got %s", s.Script)
 	}
-	if len(s.Args) != 3 || s.Args[0] != "momentum" || s.Args[1] != "BTC/USDT" || s.Args[2] != "1h" {
+	if len(s.Args) != 3 || s.Args[0] != "momentum" || s.Args[1] != "BTC/USDC" || s.Args[2] != "1h" {
 		t.Errorf("unexpected spot args: %v", s.Args)
 	}
 }

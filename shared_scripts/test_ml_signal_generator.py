@@ -24,7 +24,7 @@ def tmp_model_dir():
 @pytest.fixture
 def ml(tmp_model_dir):
     return MLSignalGenerator(
-        symbol="BTC_USDT",
+        symbol="BTC_USDC",
         rsi_threshold_buy=30,
         rsi_threshold_sell=70,
         adx_threshold=25,
@@ -257,7 +257,7 @@ class TestTrainingAndPersistence:
         ml.record_outcome(True, 5.0)
 
         # Verify file was created
-        assert os.path.exists(os.path.join(tmp_model_dir, 'BTC_USDT_training.pkl'))
+        assert os.path.exists(os.path.join(tmp_model_dir, 'BTC_USDC_training.pkl'))
 
     def test_retrain_needs_class_diversity(self, ml):
         """Should not retrain with only one class."""

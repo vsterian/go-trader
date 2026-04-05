@@ -10,7 +10,7 @@
       "id": "momentum-btc",
       "type": "spot",
       "script": "shared_scripts/check_strategy.py",
-      "args": ["momentum", "BTC/USDT", "1h"],
+      "args": ["momentum", "BTC/USDC", "1h"],
       "capital": 1000,
       "max_drawdown_pct": 60,
       "interval_seconds": 300
@@ -19,7 +19,7 @@
       "id": "pairs-btc-eth",
       "type": "spot",
       "script": "shared_scripts/check_strategy.py",
-      "args": ["pairs_spread", "BTC/USDT", "1d", "ETH/USDT"],
+      "args": ["pairs_spread", "BTC/USDC", "1d", "ETH/USDC"],
       "capital": 1000,
       "max_drawdown_pct": 60,
       "interval_seconds": 86400

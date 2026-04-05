@@ -39,11 +39,11 @@ class TestRecordMlOutcome:
         from performance_monitor import PerformanceMonitor
 
         model_dir = str(tmp_path)
-        ml = MLSignalGenerator(symbol='BTC/USDT', model_dir=model_dir)
+        ml = MLSignalGenerator(symbol='BTC/USDC', model_dir=model_dir)
         ml.record_outcome(True)
         ml.record_outcome(True)
 
-        pm = PerformanceMonitor('test-strat', 'BTC/USDT', model_dir=model_dir)
+        pm = PerformanceMonitor('test-strat', 'BTC/USDC', model_dir=model_dir)
         pm.record_trade({'pnl': 5.0, 'profitable': True})
 
         assert pm.metrics['total_trades'] == 1
@@ -54,7 +54,7 @@ class TestRecordMlOutcome:
         from performance_monitor import PerformanceMonitor
 
         model_dir = str(tmp_path)
-        pm = PerformanceMonitor('test-strat', 'BTC/USDT', model_dir=model_dir)
+        pm = PerformanceMonitor('test-strat', 'BTC/USDC', model_dir=model_dir)
         pm.record_trade({'pnl': -3.0, 'profitable': False})
 
         assert pm.metrics['losses'] == 1

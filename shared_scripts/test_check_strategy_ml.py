@@ -21,7 +21,7 @@ class TestMLFlagParsing:
     def test_flag_val_extraction(self):
         """Test _flag_val helper extracts key=value flags."""
         # Simulate by importing the function logic inline
-        test_argv = ['check_strategy.py', 'sma_crossover', 'BTC/USDT', '1h',
+        test_argv = ['check_strategy.py', 'sma_crossover', 'BTC/USDC', '1h',
                       '--ml-enabled', '--profit-pct=5.5', '--ml-buy-base=0.25']
         def _flag_val(name, default=None, argv=test_argv):
             prefix = f"--{name}="
@@ -36,9 +36,9 @@ class TestMLFlagParsing:
 
     def test_positional_args_exclude_flags(self):
         """Positional args correctly exclude --prefixed args."""
-        argv = ['sma_crossover', 'BTC/USDT', '1h', '--ml-enabled', '--profit-pct=3.0']
+        argv = ['sma_crossover', 'BTC/USDC', '1h', '--ml-enabled', '--profit-pct=3.0']
         positional = [a for a in argv if not a.startswith("--")]
-        assert positional == ['sma_crossover', 'BTC/USDT', '1h']
+        assert positional == ['sma_crossover', 'BTC/USDC', '1h']
 
 
 class TestMLSignalIntegration:
@@ -75,7 +75,7 @@ class TestMLSignalIntegration:
         upper_band = float(last['bb_upper'])
         lower_band = float(last['bb_lower'])
 
-        ml = MLSignalGenerator(symbol='BTC/USDT', model_dir=str(tmp_path))
+        ml = MLSignalGenerator(symbol='BTC/USDC', model_dir=str(tmp_path))
         stats = ml.get_performance_stats()
         stats['is_trained'] = ml.is_trained
 
@@ -100,7 +100,7 @@ class TestMLSignalIntegration:
         from ml_signal_generator import MLSignalGenerator
         from dynamic_thresholds import calculate_dynamic_buy_threshold
 
-        ml = MLSignalGenerator(symbol='BTC/USDT', model_dir=str(tmp_path))
+        ml = MLSignalGenerator(symbol='BTC/USDC', model_dir=str(tmp_path))
         # Untrained model with conditions unlikely to trigger buy
         buy_prob = ml.predict_buy_signal(100, 60, 15, 98, 102, 30, 70, 25)
         stats = {'is_trained': False}
@@ -118,7 +118,7 @@ class TestMLSignalIntegration:
         from ml_signal_generator import MLSignalGenerator
         from dynamic_thresholds import calculate_dynamic_buy_threshold
 
-        ml = MLSignalGenerator(symbol='BTC/USDT', model_dir=str(tmp_path))
+        ml = MLSignalGenerator(symbol='BTC/USDC', model_dir=str(tmp_path))
         # Conditions favorable for buy: low RSI, price near lower band, high ADX
         buy_prob = ml.predict_buy_signal(90, 20, 35, 88, 112, 30, 70, 25)
         stats = {'is_trained': False}
@@ -135,7 +135,7 @@ class TestMLSignalIntegration:
         from ml_signal_generator import MLSignalGenerator
         from dynamic_thresholds import calculate_dynamic_buy_threshold
 
-        ml = MLSignalGenerator(symbol='BTC/USDT', model_dir=str(tmp_path))
+        ml = MLSignalGenerator(symbol='BTC/USDC', model_dir=str(tmp_path))
         # Very favorable conditions
         buy_prob = ml.predict_buy_signal(85, 15, 40, 88, 112, 30, 70, 25)
         stats = {'is_trained': False}

@@ -411,7 +411,7 @@ class DeribitOptionsAdapter:
                 price = ticker["last"]
             except Exception:
                 # Last resort: use index
-                symbol = f"{underlying}/USDT"
+                symbol = f"{underlying}/USDC"
                 ticker = self.exchange.fetch_ticker(f"{underlying}/USD")
                 price = ticker["last"]
 
@@ -966,7 +966,7 @@ class DeribitExchangeAdapter:
         """Fetch spot price from Binance US via ccxt."""
         try:
             exchange = ccxt.binanceus({"enableRateLimit": True})
-            ticker = exchange.fetch_ticker(f"{underlying}/USDT")
+            ticker = exchange.fetch_ticker(f"{underlying}/USDC")
             return float(ticker.get("last") or 0)
         except Exception:
             return 0.0
@@ -976,7 +976,7 @@ class DeribitExchangeAdapter:
         import math as _math
         try:
             exchange = ccxt.binanceus({"enableRateLimit": True})
-            ohlcv = exchange.fetch_ohlcv(f"{underlying}/USDT", "1d", limit=90)
+            ohlcv = exchange.fetch_ohlcv(f"{underlying}/USDC", "1d", limit=90)
             if not ohlcv or len(ohlcv) < 15:
                 return 0.60, 50.0
             closes = [c[4] for c in ohlcv]

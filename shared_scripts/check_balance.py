@@ -41,9 +41,9 @@ def fetch_okx_balance():
 
     exchange = ccxt.okx(config)
     balance = exchange.fetch_balance({"type": "trading"})
-    # CCXT returns balance['total']['USDT'] for USDT equity
+    # CCXT returns balance['total']['USDC'] for USDC equity
     total = balance.get("total", {})
-    usdt = float(total.get("USDT", 0))
+    usdt = float(total.get("USDC", 0))
     if usdt > 0:
         return usdt
     # Fallback: check info.totalEq (OKX-specific total equity across all currencies)

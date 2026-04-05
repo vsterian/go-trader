@@ -15,7 +15,7 @@
 - `scheduler/` — Go scheduler (single `package main`); all .go files compile together
   - `executor.go` — Python subprocess runner; max 4 concurrent, 30s timeout per script
   - `server.go` — HTTP status server (`/status`, `/health` endpoints)
-  - `discord.go` — `discordgo.Session` wrapper for two-way Discord communication; `NewDiscordNotifier(token, ownerID string) (*DiscordNotifier, error)` — opens WebSocket gateway; `SendMessage(channelID, content)` — channel posts; `SendDM(userID, content)` — DM send; `AskDM(userID, question, timeout)` — send + block on reply (returns `ErrDMTimeout`); intents: `discordgo.IntentsDirectMessages`; DM detection: `m.GuildID == ""`; `FormatCategorySummary(..., channelKey, asset string)` — `asset` non-empty adds " — BTC" suffix + filters prices line; `extractAsset(sc)` uses `Args[1]` as canonical asset source (strips `/USDT` for spot); `groupByAsset(strats)` groups by asset with BTC/ETH/SOL/BNB-first sort; `channelTradeDetails` keyed as `ch+"|"+asset`; `fmtComma` — always pass absolute values
+  - `discord.go` — `discordgo.Session` wrapper for two-way Discord communication; `NewDiscordNotifier(token, ownerID string) (*DiscordNotifier, error)` — opens WebSocket gateway; `SendMessage(channelID, content)` — channel posts; `SendDM(userID, content)` — DM send; `AskDM(userID, question, timeout)` — send + block on reply (returns `ErrDMTimeout`); intents: `discordgo.IntentsDirectMessages`; DM detection: `m.GuildID == ""`; `FormatCategorySummary(..., channelKey, asset string)` — `asset` non-empty adds " — BTC" suffix + filters prices line; `extractAsset(sc)` uses `Args[1]` as canonical asset source (strips `/USDC` for spot); `groupByAsset(strats)` groups by asset with BTC/ETH/SOL/BNB-first sort; `channelTradeDetails` keyed as `ch+"|"+asset`; `fmtComma` — always pass absolute values
   - `init.go` — `go-trader init` interactive wizard + `--json <blob>` non-interactive mode; `generateConfig(InitOptions) *Config` is pure/testable; `runInitFromJSON(jsonStr, outputPath)` for scripted config gen (e.g. from OpenClaw); `runInit` orchestrates I/O
   - `prompt.go` — `Prompter` struct (String/YesNo/Choice/MultiSelect/Float); inject `NewPrompterFromReader(r,w)` for tests
   - `updater.go` — update checker; `checkForUpdates(cfg, discord, &lastNotifiedHash, &mu, state)` — git fetch, channel notify + DM upgrade prompt (goroutine); `applyUpgrade(discord, ownerID, mu, state, cfg)` — git pull + go build + state save + restart; `restartSelf()` — systemctl → syscall.Exec fallback; logs `[update]` prefix
@@ -113,7 +113,7 @@
 - Service file changes: `systemctl daemon-reload && systemctl restart go-trader`
 
 ## Backtest
-- `run_backtest.py`: `.venv/bin/python3 backtest/run_backtest.py --strategy <n> --symbol BTC/USDT --timeframe 1h --mode single`
+- `run_backtest.py`: `.venv/bin/python3 backtest/run_backtest.py --strategy <n> --symbol BTC/USDC --timeframe 1h --mode single`
 - `backtest_options.py`: `.venv/bin/python3 backtest/backtest_options.py --underlying BTC --since YYYY-MM-DD --capital 10000`
 - `backtest_theta.py`: `.venv/bin/python3 backtest/backtest_theta.py --underlying BTC --since YYYY-MM-DD --capital 10000`
 

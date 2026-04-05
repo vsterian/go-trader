@@ -4,7 +4,7 @@ Correlation analyzer — checks if a new position is too correlated with existin
 
 Usage: python3 correlation_analyzer.py <new_symbol> '<existing_symbols_json>'
 
-Output: JSON {"symbol": "ETH/USDT", "blocked": true/false, "reason": "...", "correlations": {...}}
+Output: JSON {"symbol": "ETH/USDC", "blocked": true/false, "reason": "...", "correlations": {...}}
 """
 
 import json

@@ -11,7 +11,7 @@ import (
 func TestSpotResultJSON(t *testing.T) {
 	raw := `{
 		"strategy": "sma_crossover",
-		"symbol": "BTC/USDT",
+		"symbol": "BTC/USDC",
 		"timeframe": "1h",
 		"signal": 1,
 		"price": 60000.5,

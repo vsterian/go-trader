@@ -75,7 +75,7 @@ class TestHtfTrendFilter:
     def test_bullish_trend(self):
         # Close above EMA → bullish
         closes = list(np.linspace(50, 100, 80))  # strong uptrend
-        result = htf_trend_filter("BTC/USDT", "1h", _make_fetch_fn(closes))
+        result = htf_trend_filter("BTC/USDC", "1h", _make_fetch_fn(closes))
         assert result["htf_trend"] == 1
         assert result["htf_timeframe"] == "4h"
         assert result["htf_close"] > 0
@@ -84,18 +84,18 @@ class TestHtfTrendFilter:
     def test_bearish_trend(self):
         # Close below EMA → bearish
         closes = list(np.linspace(100, 50, 80))  # strong downtrend
-        result = htf_trend_filter("BTC/USDT", "1h", _make_fetch_fn(closes))
+        result = htf_trend_filter("BTC/USDC", "1h", _make_fetch_fn(closes))
         assert result["htf_trend"] == -1
 
     def test_custom_htf_override(self):
         closes = list(np.linspace(50, 100, 80))
-        result = htf_trend_filter("BTC/USDT", "1h", _make_fetch_fn(closes), htf="1d")
+        result = htf_trend_filter("BTC/USDC", "1h", _make_fetch_fn(closes), htf="1d")
         assert result["htf_timeframe"] == "1d"
 
     def test_insufficient_data_returns_neutral(self):
         # Only 10 bars, need 50+10=60 for default ema_period=50
         closes = list(range(10))
-        result = htf_trend_filter("BTC/USDT", "1h", _make_fetch_fn(closes))
+        result = htf_trend_filter("BTC/USDC", "1h", _make_fetch_fn(closes))
         assert result["htf_trend"] == 0
         assert result["htf_ema"] == 0.0
         assert result["htf_close"] == 0.0
@@ -103,24 +103,24 @@ class TestHtfTrendFilter:
     def test_none_data_returns_neutral(self):
         def fetch_fn(symbol, timeframe, limit):
             return None
-        result = htf_trend_filter("BTC/USDT", "1h", fetch_fn)
+        result = htf_trend_filter("BTC/USDC", "1h", fetch_fn)
         assert result["htf_trend"] == 0
 
     def test_fetch_exception_returns_neutral(self):
         def fetch_fn(symbol, timeframe, limit):
             raise ConnectionError("API down")
-        result = htf_trend_filter("BTC/USDT", "1h", fetch_fn)
+        result = htf_trend_filter("BTC/USDC", "1h", fetch_fn)
         assert result["htf_trend"] == 0
 
     def test_flat_data_returns_neutral(self):
         # Close == EMA → trend = 0
         closes = [100.0] * 80
-        result = htf_trend_filter("BTC/USDT", "1h", _make_fetch_fn(closes))
+        result = htf_trend_filter("BTC/USDC", "1h", _make_fetch_fn(closes))
         assert result["htf_trend"] == 0
 
     def test_custom_ema_period(self):
         closes = list(np.linspace(50, 100, 30))
-        result = htf_trend_filter("BTC/USDT", "1h", _make_fetch_fn(closes), ema_period=10)
+        result = htf_trend_filter("BTC/USDC", "1h", _make_fetch_fn(closes), ema_period=10)
         assert result["htf_trend"] == 1  # uptrend with shorter EMA
 
 

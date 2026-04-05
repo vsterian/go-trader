@@ -54,7 +54,7 @@ def _fetch_ohlcv_closes(underlying, timeframe, limit, min_len, adapter=None):
     try:
         import ccxt
         exchange = ccxt.binanceus({"enableRateLimit": True})
-        ohlcv = exchange.fetch_ohlcv(f"{underlying}/USDT", timeframe, limit=limit)
+        ohlcv = exchange.fetch_ohlcv(f"{underlying}/USDC", timeframe, limit=limit)
         if not ohlcv or len(ohlcv) < min_len:
             return None
         return [c[4] for c in ohlcv]

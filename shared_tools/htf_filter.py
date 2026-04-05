@@ -31,7 +31,7 @@ def htf_trend_filter(symbol, timeframe, fetch_fn, htf=None, ema_period=50):
     Fetch HTF data, compute EMA, return trend direction.
 
     Args:
-        symbol: Trading pair (e.g. "BTC/USDT" or "BTC")
+        symbol: Trading pair (e.g. "BTC/USDC" or "BTC")
         timeframe: The strategy's (lower) timeframe
         fetch_fn: Callable(symbol, timeframe, limit) → DataFrame with 'close' column
         htf: Override HTF timeframe (default: auto from LTF)

@@ -579,7 +579,7 @@ Ask the following questions (can be asked all at once or one at a time):
 > - Maker fee %: (e.g. `0.05`)
 > - Per-contract fee (options only, in USD, or `none`):
 
-> **Assets to trade** (e.g. `BTC, ETH` or `BTC/USDT, SOL/USDT`):
+> **Assets to trade** (e.g. `BTC, ETH` or `BTC/USDC, SOL/USDC`):
 
 > **Strategies to run** — which strategy types should this platform use?
 > - Spot: sma_crossover, ema_crossover, momentum, rsi, bollinger_bands, macd, mean_reversion, volume_weighted, triple_ema, rsi_macd_combo, pairs_spread
@@ -657,7 +657,7 @@ Channels are resolved dynamically via `resolveChannel(channels, platform, stratT
 Add example strategy entries for the new platform:
 ```json
 {"id": "<name>-momentum-btc", "type": "spot", "script": "shared_scripts/check_strategy.py",
- "args": ["momentum", "BTC/USDT", "1h"], "capital": 1000, "max_drawdown_pct": 60, "interval_seconds": 300}
+ "args": ["momentum", "BTC/USDC", "1h"], "capital": 1000, "max_drawdown_pct": 60, "interval_seconds": 300}
 ```
 Adjust `type`, `script`, and `args` for perps or options as appropriate.
 
@@ -758,11 +758,11 @@ Run historical simulations using scripts in `backtest/`. All require `.venv/bin/
 ```bash
 # Single strategy run
 .venv/bin/python3 backtest/run_backtest.py \
-  --strategy <name> --symbol BTC/USDT --timeframe 1h --mode single
+  --strategy <name> --symbol BTC/USDC --timeframe 1h --mode single
 
 # Compare two strategies
 .venv/bin/python3 backtest/run_backtest.py \
-  --strategy <name> --symbol BTC/USDT --timeframe 1h --mode compare
+  --strategy <name> --symbol BTC/USDC --timeframe 1h --mode compare
 
 # Multi-symbol sweep
 .venv/bin/python3 backtest/run_backtest.py \
@@ -770,11 +770,11 @@ Run historical simulations using scripts in `backtest/`. All require `.venv/bin/
 
 # Parameter optimization
 .venv/bin/python3 backtest/run_backtest.py \
-  --strategy <name> --symbol BTC/USDT --timeframe 1h --mode optimize
+  --strategy <name> --symbol BTC/USDC --timeframe 1h --mode optimize
 
 # Limit history (e.g. last 90 days)
 .venv/bin/python3 backtest/run_backtest.py \
-  --strategy <name> --symbol BTC/USDT --timeframe 1h --since 90
+  --strategy <name> --symbol BTC/USDC --timeframe 1h --since 90
 ```
 
 Key flags: `--strategy`, `--symbol`, `--timeframe`, `--mode` (single/compare/multi/optimize), `--since` (days)
@@ -1019,7 +1019,7 @@ When the user says `/menu`, "show menu", "what can I configure", "what's availab
 5. BACKTESTING
    Spot:
      .venv/bin/python3 backtest/run_backtest.py \
-       --strategy <n> --symbol BTC/USDT --timeframe 1h \
+       --strategy <n> --symbol BTC/USDC --timeframe 1h \
        --mode single|compare|multi|optimize
    Options:
      .venv/bin/python3 backtest/backtest_options.py --underlying BTC --since YYYY-MM-DD --capital 10000
@@ -1177,20 +1177,20 @@ Then restart: `sudo systemctl restart go-trader`
 Each spot strategy needs entries for each asset it supports:
 
 ```json
-{"id": "momentum-btc", "type": "spot", "script": "shared_scripts/check_strategy.py", "args": ["momentum", "BTC/USDT", "1h"], "capital": 1000, "max_drawdown_pct": 60, "interval_seconds": 300}
-{"id": "momentum-eth", "type": "spot", "script": "shared_scripts/check_strategy.py", "args": ["momentum", "ETH/USDT", "1h"], "capital": 1000, "max_drawdown_pct": 60, "interval_seconds": 300}
-{"id": "momentum-sol", "type": "spot", "script": "shared_scripts/check_strategy.py", "args": ["momentum", "SOL/USDT", "1h"], "capital": 1000, "max_drawdown_pct": 60, "interval_seconds": 300}
+{"id": "momentum-btc", "type": "spot", "script": "shared_scripts/check_strategy.py", "args": ["momentum", "BTC/USDC", "1h"], "capital": 1000, "max_drawdown_pct": 60, "interval_seconds": 300}
+{"id": "momentum-eth", "type": "spot", "script": "shared_scripts/check_strategy.py", "args": ["momentum", "ETH/USDC", "1h"], "capital": 1000, "max_drawdown_pct": 60, "interval_seconds": 300}
+{"id": "momentum-sol", "type": "spot", "script": "shared_scripts/check_strategy.py", "args": ["momentum", "SOL/USDC", "1h"], "capital": 1000, "max_drawdown_pct": 60, "interval_seconds": 300}
 ```
 
 **Strategies and their assets:**
 - `sma_crossover`, `ema_crossover`, `momentum`, `rsi`, `bollinger_bands`, `macd`, `mean_reversion`, `volume_weighted`, `triple_ema`, `rsi_macd_combo`: BTC, ETH, SOL
-- `pairs_spread`: Requires two assets — `args: ["pairs_spread", "BTC/USDT", "1d", "ETH/USDT"]`
+- `pairs_spread`: Requires two assets — `args: ["pairs_spread", "BTC/USDC", "1d", "ETH/USDC"]`
 
 **Pairs strategy IDs and args:**
 ```json
-{"id": "pairs-btc-eth", "args": ["pairs_spread", "BTC/USDT", "1d", "ETH/USDT"], "interval_seconds": 86400}
-{"id": "pairs-btc-sol", "args": ["pairs_spread", "BTC/USDT", "1d", "SOL/USDT"], "interval_seconds": 86400}
-{"id": "pairs-eth-sol", "args": ["pairs_spread", "ETH/USDT", "1d", "SOL/USDT"], "interval_seconds": 86400}
+{"id": "pairs-btc-eth", "args": ["pairs_spread", "BTC/USDC", "1d", "ETH/USDC"], "interval_seconds": 86400}
+{"id": "pairs-btc-sol", "args": ["pairs_spread", "BTC/USDC", "1d", "SOL/USDC"], "interval_seconds": 86400}
+{"id": "pairs-eth-sol", "args": ["pairs_spread", "ETH/USDC", "1d", "SOL/USDC"], "interval_seconds": 86400}
 ```
 
 ### Deribit Options Entries
@@ -1274,7 +1274,7 @@ Each OKX spot strategy runs the shared spot strategy suite on crypto assets:
 
 ### OKX Perps Entries
 
-Each OKX perps strategy runs on USDT-margined perpetual swaps:
+Each OKX perps strategy runs on USDC-margined perpetual swaps:
 
 ```json
 {"id": "okx-sma-btc-perp", "type": "perps", "platform": "okx", "script": "shared_scripts/check_okx.py", "args": ["sma_crossover", "BTC", "1h", "--mode=paper", "--inst-type=swap"], "capital": 1000, "max_drawdown_pct": 5, "interval_seconds": 3600}

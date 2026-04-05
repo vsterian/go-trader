@@ -7,7 +7,7 @@ Usage:
   Signal mode: python3 check_strategy.py <strategy> <symbol> <timeframe> [symbol_b]
   Execute mode: python3 check_strategy.py --execute --symbol=X --side=buy|sell --size=N --mode=live
 
-  symbol_b  Optional second asset symbol for pairs_spread (e.g. ETH/USDT).
+  symbol_b  Optional second asset symbol for pairs_spread (e.g. ETH/USDC).
             When provided, close prices of symbol_b are merged into the
             dataframe as the 'close_b' column so the strategy runs proper
             stat-arb.  Without it, pairs_spread degrades to self-mean-reversion.
@@ -157,7 +157,7 @@ def main():
             print(
                 "Warning: pairs_spread requires a secondary symbol (symbol_b); "
                 "degrading to self-mean-reversion. Pass a 4th argument to enable "
-                "proper stat-arb (e.g. ETH/USDT for a BTC/USDT primary).",
+                "proper stat-arb (e.g. ETH/USDC for a BTC/USDC primary).",
                 file=sys.stderr,
             )
 

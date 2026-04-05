@@ -69,19 +69,19 @@ class BinanceUSExchangeAdapter:
             self._markets_loaded = True
 
     def _resolve_pair(self, symbol: str) -> str:
-        """Resolve underlying (e.g. 'BTC') to a tradeable pair (e.g. 'BTC/USDT')."""
+        """Resolve underlying (e.g. 'BTC') to a tradeable pair (e.g. 'BTC/USDC')."""
         if "/" in symbol:
             return symbol
-        for suffix in ("/USDT", "/USD", "/USDC"):
+        for suffix in ("/USDC", "/USD", "/USDC"):
             pair = symbol + suffix
             self._load_markets()
             if pair in self._public_exchange.markets:
                 return pair
-        return symbol + "/USDT"
+        return symbol + "/USDC"
 
     def get_spot_price(self, underlying: str) -> float:
         """Fetch current spot price for underlying via BinanceUS public API."""
-        for suffix in ("/USDT", "/USD", "/USDC"):
+        for suffix in ("/USDC", "/USD", "/USDC"):
             try:
                 ticker = self._public_exchange.fetch_ticker(underlying + suffix)
                 price = ticker.get("last") or 0
@@ -178,7 +178,7 @@ class BinanceUSExchangeAdapter:
     # Balance
     # ─────────────────────────────────────────────
 
-    def get_balance(self, asset: str = "USDT") -> float:
+    def get_balance(self, asset: str = "USDC") -> float:
         """Fetch available (free) balance for an asset. Requires live mode."""
         if not self._is_live:
             raise RuntimeError("get_balance requires live mode (set BINANCE_API_KEY)")
@@ -206,7 +206,7 @@ class BinanceUSExchangeAdapter:
     def get_vol_metrics(self, underlying: str) -> Tuple[float, float]:
         """Compute 14-day historical vol and IV rank from daily OHLCV."""
         try:
-            ohlcv = self._public_exchange.fetch_ohlcv(underlying + "/USDT", "1d", limit=90)
+            ohlcv = self._public_exchange.fetch_ohlcv(underlying + "/USDC", "1d", limit=90)
             if not ohlcv or len(ohlcv) < 15:
                 return 0.60, 50.0
             closes = [c[4] for c in ohlcv]

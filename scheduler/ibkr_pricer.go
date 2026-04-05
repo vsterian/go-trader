@@ -22,7 +22,7 @@ func (p *IBKRPricer) Name() string { return "ibkr" }
 // FetchSpotPrice looks up the spot price from the cached prices map.
 func (p *IBKRPricer) FetchSpotPrice(underlying string) (float64, error) {
 	upper := strings.ToUpper(underlying)
-	for _, suffix := range []string{"/USD", "/USDT", "/USDC"} {
+	for _, suffix := range []string{"/USD", "/USDC", "/USDC"} {
 		if price, ok := p.spotPrices[upper+suffix]; ok && price > 0 {
 			return price, nil
 		}

@@ -39,14 +39,14 @@ class TestValidateOrder:
         # Mock market data
         self.adapter._markets_loaded = True
         self.adapter._exchange.markets = {
-            "BTC/USDT": {
+            "BTC/USDC": {
                 "limits": {
                     "amount": {"min": 0.00001, "max": 9999.0},
                     "cost": {"min": 10.0},
                 },
                 "precision": {"amount": 5},
             },
-            "ETH/USDT": {
+            "ETH/USDC": {
                 "limits": {
                     "amount": {"min": 0.0001, "max": 9999.0},
                     "cost": {"min": 10.0},
@@ -76,13 +76,13 @@ class TestValidateOrder:
     def test_small_order_rejected(self):
         # Order where max_qty prevents meeting min notional
         # BTC max_qty=9999 at $0.0001 → max notional $0.999 < $10
-        self.adapter._exchange.markets["BTC/USDT"]["limits"]["amount"]["max"] = 0.0001
+        self.adapter._exchange.markets["BTC/USDC"]["limits"]["amount"]["max"] = 0.0001
         size, err = self.adapter.validate_order("BTC", 0.00001, 67000.0)
         assert err != "" or size == 0
 
     def test_full_pair_symbol(self):
-        # Should work with "BTC/USDT" too
-        size, err = self.adapter.validate_order("BTC/USDT", 0.001, 67000.0)
+        # Should work with "BTC/USDC" too
+        size, err = self.adapter.validate_order("BTC/USDC", 0.001, 67000.0)
         assert err == ""
         assert size > 0
 
@@ -94,7 +94,7 @@ class TestGetMinNotional:
                 self.adapter = BinanceUSExchangeAdapter()
         self.adapter._markets_loaded = True
         self.adapter._exchange.markets = {
-            "BTC/USDT": {
+            "BTC/USDC": {
                 "limits": {"cost": {"min": 10.0}, "amount": {"min": 0.00001}},
                 "precision": {"amount": 5},
             }
@@ -105,7 +105,7 @@ class TestGetMinNotional:
 
     def test_floor_enforced(self):
         # Even if exchange says $5, we enforce $10 floor
-        self.adapter._exchange.markets["BTC/USDT"]["limits"]["cost"]["min"] = 5.0
+        self.adapter._exchange.markets["BTC/USDC"]["limits"]["cost"]["min"] = 5.0
         assert self.adapter.get_min_notional("BTC") == 10.0
 
     def test_unknown_symbol_returns_floor(self):
@@ -119,7 +119,7 @@ class TestGetLotSize:
                 self.adapter = BinanceUSExchangeAdapter()
         self.adapter._markets_loaded = True
         self.adapter._exchange.markets = {
-            "SOL/USDT": {
+            "SOL/USDC": {
                 "limits": {"amount": {"min": 0.01, "max": 100000.0}},
                 "precision": {"amount": 2},
             }
@@ -151,7 +151,7 @@ class TestLiveMode:
 class TestMarketOrders:
     def setup_method(self, method=None):
         self.mock_exchange = MagicMock()
-        self.mock_exchange.markets = {"BTC/USDT": {"id": "BTCUSDT"}}
+        self.mock_exchange.markets = {"BTC/USDC": {"id": "BTCUSDC"}}
         with patch.dict(os.environ, {"BINANCE_API_KEY": "test_key", "BINANCE_API_SECRET": "test_secret"}):
             with patch.object(mod, '_get_ccxt_exchange', return_value=self.mock_exchange):
                 self.adapter = BinanceUSExchangeAdapter()
@@ -162,7 +162,7 @@ class TestMarketOrders:
             "id": "123", "average": 67000.0, "filled": 0.001, "status": "closed"
         }
         result = self.adapter.market_buy("BTC", 0.001)
-        self.mock_exchange.create_market_buy_order.assert_called_once_with("BTC/USDT", 0.001)
+        self.mock_exchange.create_market_buy_order.assert_called_once_with("BTC/USDC", 0.001)
         assert result["average"] == 67000.0
 
     def test_market_sell(self):
@@ -170,13 +170,13 @@ class TestMarketOrders:
             "id": "456", "average": 67100.0, "filled": 0.001, "status": "closed"
         }
         result = self.adapter.market_sell("BTC", 0.001)
-        self.mock_exchange.create_market_sell_order.assert_called_once_with("BTC/USDT", 0.001)
+        self.mock_exchange.create_market_sell_order.assert_called_once_with("BTC/USDC", 0.001)
         assert result["average"] == 67100.0
 
     def test_market_buy_full_pair(self):
         self.mock_exchange.create_market_buy_order.return_value = {"id": "789"}
-        self.adapter.market_buy("BTC/USDT", 0.01)
-        self.mock_exchange.create_market_buy_order.assert_called_once_with("BTC/USDT", 0.01)
+        self.adapter.market_buy("BTC/USDC", 0.01)
+        self.mock_exchange.create_market_buy_order.assert_called_once_with("BTC/USDC", 0.01)
 
     @patch.dict(os.environ, {"BINANCE_API_KEY": "", "BINANCE_API_SECRET": ""})
     def test_buy_raises_in_paper_mode(self):
@@ -197,10 +197,10 @@ class TestGetBalance:
     @patch.dict(os.environ, {"BINANCE_API_KEY": "k", "BINANCE_API_SECRET": "s"})
     def test_fetch_balance(self):
         mock_ex = MagicMock()
-        mock_ex.fetch_balance.return_value = {"free": {"USDT": 1500.0, "BTC": 0.05}}
+        mock_ex.fetch_balance.return_value = {"free": {"USDC": 1500.0, "BTC": 0.05}}
         with patch.object(mod, '_get_ccxt_exchange', return_value=mock_ex):
             adapter = BinanceUSExchangeAdapter()
-        assert adapter.get_balance("USDT") == 1500.0
+        assert adapter.get_balance("USDC") == 1500.0
         assert adapter.get_balance("BTC") == 0.05
 
     @patch.dict(os.environ, {"BINANCE_API_KEY": "", "BINANCE_API_SECRET": ""})
@@ -208,4 +208,4 @@ class TestGetBalance:
         with patch.object(mod, '_get_ccxt_exchange', return_value=MagicMock()):
             adapter = BinanceUSExchangeAdapter()
         with pytest.raises(RuntimeError, match="live mode"):
-            adapter.get_balance("USDT")
+            adapter.get_balance("USDC")
