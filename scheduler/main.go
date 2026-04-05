@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -462,9 +463,9 @@ func main() {
 					var mlProfitPct float64
 					if sc.MLConfig != nil && sc.MLConfig.Enabled && sc.Type == "spot" {
 						for sym, pos := range stratState.Positions {
-							if pos.Quantity > 0 && pos.AvgPrice > 0 {
+							if pos.Quantity > 0 && pos.AvgCost > 0 {
 								if curPrice, ok := prices[sym]; ok && curPrice > 0 {
-									mlProfitPct = (curPrice/pos.AvgPrice - 1) * 100
+									mlProfitPct = (curPrice/pos.AvgCost - 1) * 100
 								}
 							}
 						}
