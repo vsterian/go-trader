@@ -257,3 +257,85 @@ func TestContractSpecJSON(t *testing.T) {
 		t.Errorf("Margin = %g, want 6600", spec.Margin)
 	}
 }
+
+func TestBinanceUSExecuteResultJSON(t *testing.T) {
+	raw := `{
+		"execution": {
+			"action": "buy",
+			"symbol": "BTC",
+			"size": 0.001,
+			"fill": {"avg_px": 67050, "total_sz": 0.001}
+		},
+		"platform": "binanceus",
+		"timestamp": "2025-01-01T00:00:00Z"
+	}`
+
+	var result BinanceUSExecuteResult
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Execution == nil {
+		t.Fatal("Execution is nil")
+	}
+	if result.Execution.Action != "buy" {
+		t.Errorf("Action = %q, want buy", result.Execution.Action)
+	}
+	if result.Execution.Size != 0.001 {
+		t.Errorf("Size = %g, want 0.001", result.Execution.Size)
+	}
+	if result.Execution.Fill == nil {
+		t.Fatal("Fill is nil")
+	}
+	if result.Execution.Fill.AvgPx != 67050 {
+		t.Errorf("AvgPx = %g, want 67050", result.Execution.Fill.AvgPx)
+	}
+	if result.Execution.Fill.TotalSz != 0.001 {
+		t.Errorf("TotalSz = %g, want 0.001", result.Execution.Fill.TotalSz)
+	}
+	if result.Platform != "binanceus" {
+		t.Errorf("Platform = %q, want binanceus", result.Platform)
+	}
+}
+
+func TestBinanceUSExecuteResultErrorJSON(t *testing.T) {
+	raw := `{
+		"execution": null,
+		"platform": "binanceus",
+		"timestamp": "2025-01-01T00:00:00Z",
+		"error": "order value $5.00 below min notional $10.00"
+	}`
+
+	var result BinanceUSExecuteResult
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Execution != nil {
+		t.Error("Execution should be nil on error")
+	}
+	if result.Error != "order value $5.00 below min notional $10.00" {
+		t.Errorf("Error = %q, want min notional error", result.Error)
+	}
+}
+
+func TestBinanceUSExecuteResultSellJSON(t *testing.T) {
+	raw := `{
+		"execution": {
+			"action": "sell",
+			"symbol": "ETH",
+			"size": 0.5,
+			"fill": {"avg_px": 3400.5, "total_sz": 0.5}
+		},
+		"platform": "binanceus"
+	}`
+
+	var result BinanceUSExecuteResult
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Execution.Action != "sell" {
+		t.Errorf("Action = %q, want sell", result.Execution.Action)
+	}
+	if result.Execution.Fill.AvgPx != 3400.5 {
+		t.Errorf("AvgPx = %g, want 3400.5", result.Execution.Fill.AvgPx)
+	}
+}

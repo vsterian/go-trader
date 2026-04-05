@@ -253,6 +253,7 @@ type InitOptions struct {
 	MLBuyBase               float64           `json:"mlBuyBase,omitempty"`     // ML buy threshold base (default 0.30)
 	MLSellBase              float64           `json:"mlSellBase,omitempty"`    // ML sell threshold base (default 0.70)
 	MLAdaptation            bool              `json:"mlAdaptation,omitempty"`  // enable ML adaptation/self-optimization
+	BinanceLive             bool              `json:"binanceLive,omitempty"`   // enable live trading for BinanceUS spot
 }
 
 // generateConfig builds a Config from InitOptions. Pure function, no I/O.
@@ -302,12 +303,16 @@ func generateConfig(opts InitOptions) *Config {
 					continue
 				}
 				id := shortName + "-" + strings.ToLower(assetName)
+				args := []string{stratID, sym, "1h"}
+				if opts.BinanceLive {
+					args = append(args, "--mode=live")
+				}
 				cfg.Strategies = append(cfg.Strategies, StrategyConfig{
 					ID:              id,
 					Type:            "spot",
 					Platform:        "binanceus",
 					Script:          "shared_scripts/check_strategy.py",
-					Args:            []string{stratID, sym, "1h"},
+					Args:            args,
 					Capital:         opts.SpotCapital,
 					MaxDrawdownPct:  opts.SpotDrawdown,
 					IntervalSeconds: 3600,
@@ -320,12 +325,16 @@ func generateConfig(opts InitOptions) *Config {
 			for _, pair := range makePairs(opts.Assets) {
 				a1, a2 := pair[0], pair[1]
 				id := fmt.Sprintf("pairs-%s-%s", strings.ToLower(a1), strings.ToLower(a2))
+				args := []string{"pairs_spread", assetSymbol[a1], "1d", assetSymbol[a2]}
+				if opts.BinanceLive {
+					args = append(args, "--mode=live")
+				}
 				cfg.Strategies = append(cfg.Strategies, StrategyConfig{
 					ID:              id,
 					Type:            "spot",
 					Platform:        "binanceus",
 					Script:          "shared_scripts/check_strategy.py",
-					Args:            []string{"pairs_spread", assetSymbol[a1], "1d", assetSymbol[a2]},
+					Args:            args,
 					Capital:         opts.SpotCapital,
 					MaxDrawdownPct:  opts.SpotDrawdown,
 					IntervalSeconds: 86400,

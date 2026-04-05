@@ -137,8 +137,8 @@ func TestMigrateConfigCreatesNestedPaths(t *testing.T) {
 	}
 
 	discord := updated["discord"].(map[string]interface{})
-	if discord["dm_live_trades"] != "true" {
-		t.Errorf("discord.dm_live_trades = %v, want %q", discord["dm_live_trades"], "true")
+	if discord["dm_live_trades"] != true {
+		t.Errorf("discord.dm_live_trades = %v, want true (bool)", discord["dm_live_trades"])
 	}
 }
 

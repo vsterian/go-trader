@@ -492,6 +492,54 @@ func RunOKXExecute(script, symbol, side string, size float64, instType string) (
 	return &result, stderrStr, nil
 }
 
+// BinanceUSFill holds fill details from a live BinanceUS order.
+type BinanceUSFill struct {
+	AvgPx   float64 `json:"avg_px"`
+	TotalSz float64 `json:"total_sz"`
+}
+
+// BinanceUSExecution is the execution block from check_strategy.py --execute output.
+type BinanceUSExecution struct {
+	Action string          `json:"action"`
+	Symbol string          `json:"symbol"`
+	Size   float64         `json:"size"`
+	Fill   *BinanceUSFill  `json:"fill,omitempty"`
+}
+
+// BinanceUSExecuteResult is the top-level JSON from check_strategy.py --execute.
+type BinanceUSExecuteResult struct {
+	Execution *BinanceUSExecution `json:"execution"`
+	Platform  string              `json:"platform"`
+	Timestamp string              `json:"timestamp"`
+	Error     string              `json:"error,omitempty"`
+}
+
+// RunBinanceUSExecute runs check_strategy.py in execute mode for live BinanceUS orders.
+func RunBinanceUSExecute(script, symbol, side string, size float64) (*BinanceUSExecuteResult, string, error) {
+	args := []string{
+		"--execute",
+		fmt.Sprintf("--symbol=%s", symbol),
+		fmt.Sprintf("--side=%s", side),
+		fmt.Sprintf("--size=%g", size),
+		"--mode=live",
+	}
+	stdout, stderr, err := RunPythonScript(script, args)
+	stderrStr := string(stderr)
+	if err != nil {
+		var result BinanceUSExecuteResult
+		if jsonErr := json.Unmarshal(stdout, &result); jsonErr == nil && result.Error != "" {
+			return &result, stderrStr, nil
+		}
+		return nil, stderrStr, fmt.Errorf("binanceus execute error: %w (stderr: %s)", err, stderrStr)
+	}
+
+	var result BinanceUSExecuteResult
+	if err := json.Unmarshal(stdout, &result); err != nil {
+		return nil, stderrStr, fmt.Errorf("parse binanceus execute output: %w (stdout: %s)", err, string(stdout))
+	}
+	return &result, stderrStr, nil
+}
+
 // FetchPrices runs check_price.py and returns a map of symbol→price.
 func FetchPrices(symbols []string) (map[string]float64, error) {
 	stdout, stderr, err := RunPythonScript("shared_scripts/check_price.py", symbols)

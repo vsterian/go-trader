@@ -459,6 +459,16 @@ func main() {
 							}
 						}
 					}
+					var busCash float64
+					var busPosQty float64
+					if sc.Platform == "binanceus" && binanceusIsLive(sc.Args) {
+						busCash = stratState.Cash
+						if sym := binanceusSymbol(sc.Args); sym != "" {
+							if pos, ok := stratState.Positions[sym]; ok {
+								busPosQty = pos.Quantity
+							}
+						}
+					}
 					// ML: compute current position profit % for dynamic sell threshold
 					var mlProfitPct float64
 					if sc.MLConfig != nil && sc.MLConfig.Enabled && sc.Type == "spot" {
@@ -530,6 +540,38 @@ func main() {
 									mu.Lock()
 									trades, detail = executeRobinhoodResult(sc, stratState, result, execResult, signalStr, price, logger)
 									mu.Unlock()
+								}
+							}
+						} else if sc.Platform == "binanceus" && binanceusIsLive(sc.Args) {
+							// BinanceUS live trading
+							if sc.MLConfig != nil && sc.MLConfig.Enabled && mlProfitPct != 0 {
+								sc.Args = append(append([]string{}, sc.Args...), fmt.Sprintf("--profit-pct=%.4f", mlProfitPct))
+							}
+							if result, signalStr, price, ok := runSpotCheck(sc, prices, logger); ok {
+								if sc.MLConfig != nil && sc.MLConfig.Enabled && result.Signal == 1 {
+									if blocked, reason := checkMLCorrelation(sc, result.Symbol, stratState, logger); blocked {
+										logger.Info("[ml] correlation blocked BUY: %s", reason)
+										result.Signal = 0
+										signalStr = "HOLD"
+									}
+								}
+								prices[result.Symbol] = price
+								var execResult *BinanceUSExecuteResult
+								liveExecFailed := false
+								if result.Signal != 0 {
+									if er, ok2 := runBinanceUSExecuteOrder(sc, result, price, busCash, busPosQty, logger); ok2 {
+										execResult = er
+									} else {
+										liveExecFailed = true
+									}
+								}
+								if !liveExecFailed {
+									mu.Lock()
+									trades, detail = executeBinanceUSResult(sc, stratState, result, execResult, signalStr, price, logger)
+									mu.Unlock()
+								}
+								if sc.MLConfig != nil && sc.MLConfig.Enabled && result.Signal == -1 && trades > 0 {
+									go recordMLOutcome(sc, result.Symbol, mlProfitPct, logger)
 								}
 							}
 						} else {
@@ -1712,4 +1754,87 @@ func executeOKXResult(sc StrategyConfig, s *StrategyState, result *OKXResult, ex
 		detail = fmt.Sprintf("[%s] %s%s %s @ $%.2f", sc.ID, prefix, signalStr, result.Symbol, fillPrice)
 	}
 	return trades, detail
+}
+
+// binanceusIsLive reports whether --mode=live appears in BinanceUS strategy args.
+func binanceusIsLive(args []string) bool {
+for _, arg := range args {
+if arg == "--mode=live" {
+return true
+}
+}
+return false
+}
+
+// binanceusSymbol extracts the symbol from BinanceUS strategy args (e.g. "BTC/USDT").
+func binanceusSymbol(args []string) string {
+if len(args) >= 2 {
+return args[1]
+}
+return ""
+}
+
+// runBinanceUSExecuteOrder places a live market order on BinanceUS (Phase 3, no lock).
+func runBinanceUSExecuteOrder(sc StrategyConfig, result *SpotResult, price, cash, posQty float64, logger *StrategyLogger) (*BinanceUSExecuteResult, bool) {
+isBuy := result.Signal == 1
+var size float64
+if isBuy {
+budget := cash * 0.95
+if budget < 1 || price <= 0 {
+logger.Info("Insufficient cash ($%.2f) for live buy", cash)
+return nil, false
+}
+size = budget / price
+} else {
+if posQty <= 0 {
+logger.Info("No position to close for %s", result.Symbol)
+return nil, false
+}
+size = posQty
+}
+
+side := "buy"
+if !isBuy {
+side = "sell"
+}
+logger.Info("Placing live BinanceUS %s %s size=%.6f", side, result.Symbol, size)
+
+execResult, stderr, err := RunBinanceUSExecute(sc.Script, result.Symbol, side, size)
+if stderr != "" {
+logger.Info("execute stderr: %s", stderr)
+}
+if err != nil {
+logger.Error("Live execute failed: %v", err)
+return nil, false
+}
+if execResult.Error != "" {
+logger.Error("Live execute returned error: %s", execResult.Error)
+return nil, false
+}
+return execResult, true
+}
+
+// executeBinanceUSResult applies a BinanceUS live result to state. Must be called under Lock.
+func executeBinanceUSResult(sc StrategyConfig, s *StrategyState, result *SpotResult, execResult *BinanceUSExecuteResult, signalStr string, price float64, logger *StrategyLogger) (int, string) {
+fillPrice := price
+if execResult != nil && execResult.Execution != nil && execResult.Execution.Fill != nil && execResult.Execution.Fill.AvgPx > 0 {
+fillPrice = execResult.Execution.Fill.AvgPx
+logger.Info("Live fill at $%.2f (mid was $%.2f)", fillPrice, price)
+}
+
+trades, err := ExecuteSpotSignal(s, result.Signal, result.Symbol, fillPrice, logger)
+if err != nil {
+logger.Error("Trade execution failed: %v", err)
+return 0, ""
+}
+
+detail := ""
+if trades > 0 {
+prefix := ""
+if execResult != nil {
+prefix = "LIVE "
+}
+detail = fmt.Sprintf("[%s] %s%s %s @ $%.2f", sc.ID, prefix, signalStr, result.Symbol, fillPrice)
+}
+return trades, detail
 }

@@ -3,7 +3,9 @@
 Stateless spot strategy check script.
 Fetches data, runs strategy, outputs JSON to stdout, exits.
 
-Usage: python3 check_strategy.py <strategy> <symbol> <timeframe> [symbol_b]
+Usage:
+  Signal mode: python3 check_strategy.py <strategy> <symbol> <timeframe> [symbol_b]
+  Execute mode: python3 check_strategy.py --execute --symbol=X --side=buy|sell --size=N --mode=live
 
   symbol_b  Optional second asset symbol for pairs_spread (e.g. ETH/USDT).
             When provided, close prices of symbol_b are merged into the
@@ -20,6 +22,98 @@ from datetime import datetime, timezone
 # Add parent dirs to path so we can import from strategies/ and core/
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'shared_strategies', 'spot'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'shared_tools'))
+
+
+def run_execute():
+    """Execute a live market order on BinanceUS."""
+    def _flag_val(name, default=None):
+        prefix = f"--{name}="
+        for a in sys.argv[1:]:
+            if a.startswith(prefix):
+                return a[len(prefix):]
+        return default
+
+    symbol = _flag_val("symbol")
+    side = _flag_val("side")
+    size = float(_flag_val("size", "0"))
+    mode = _flag_val("mode", "paper")
+
+    if mode != "live":
+        print(json.dumps({"error": "--execute requires --mode=live", "platform": "binanceus"}))
+        sys.exit(1)
+
+    if not symbol or not side or size <= 0:
+        print(json.dumps({"error": "missing --symbol, --side, or --size", "platform": "binanceus"}))
+        sys.exit(1)
+
+    try:
+        # Import adapter from platforms/binanceus/
+        adapter_dir = os.path.join(os.path.dirname(__file__), '..', 'platforms', 'binanceus')
+        sys.path.insert(0, adapter_dir)
+        from adapter import BinanceUSExchangeAdapter
+
+        adapter = BinanceUSExchangeAdapter()
+        if not adapter.is_live:
+            print(json.dumps({
+                "error": "BINANCE_API_KEY and BINANCE_API_SECRET must be set for live execution",
+                "platform": "binanceus",
+            }))
+            sys.exit(1)
+
+        # Get current price for validation
+        underlying = symbol.split("/")[0] if "/" in symbol else symbol
+        price = adapter.get_spot_price(underlying)
+        if price <= 0:
+            print(json.dumps({"error": f"could not fetch price for {symbol}", "platform": "binanceus"}))
+            sys.exit(1)
+
+        # Validate order: min notional + lot size
+        adj_size, err = adapter.validate_order(symbol, size, price)
+        if err:
+            print(json.dumps({
+                "error": f"order validation failed: {err}",
+                "platform": "binanceus",
+                "execution": None,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }))
+            sys.exit(1)
+
+        is_buy = side.lower() == "buy"
+        if is_buy:
+            result = adapter.market_buy(symbol, adj_size)
+        else:
+            result = adapter.market_sell(symbol, adj_size)
+
+        # Extract fill info from ccxt response
+        fill = {}
+        try:
+            avg_px = float(result.get("average", 0) or 0)
+            total_sz = float(result.get("filled", 0) or 0)
+            if avg_px > 0:
+                fill = {"avg_px": avg_px, "total_sz": total_sz}
+        except Exception:
+            pass
+
+        print(json.dumps({
+            "execution": {
+                "action": "buy" if is_buy else "sell",
+                "symbol": symbol,
+                "size": adj_size,
+                "fill": fill,
+            },
+            "platform": "binanceus",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }))
+
+    except Exception as e:
+        traceback.print_exc(file=sys.stderr)
+        print(json.dumps({
+            "execution": None,
+            "platform": "binanceus",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "error": str(e),
+        }))
+        sys.exit(1)
 
 
 def main():
@@ -276,4 +370,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if "--execute" in sys.argv:
+        run_execute()
+    else:
+        main()
