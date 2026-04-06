@@ -11,7 +11,7 @@ func TestComputeCorrelation_SpotLong(t *testing.T) {
 			ID:   "sma-btc",
 			Type: "spot",
 			Positions: map[string]*Position{
-				"BTC/USDT": {Symbol: "BTC/USDT", Quantity: 0.1, Side: "long"},
+				"BTC/USDC": {Symbol: "BTC/USDC", Quantity: 0.1, Side: "long"},
 			},
 			OptionPositions: make(map[string]*OptionPosition),
 		},
@@ -19,16 +19,16 @@ func TestComputeCorrelation_SpotLong(t *testing.T) {
 			ID:   "momentum-btc",
 			Type: "spot",
 			Positions: map[string]*Position{
-				"BTC/USDT": {Symbol: "BTC/USDT", Quantity: 0.2, Side: "long"},
+				"BTC/USDC": {Symbol: "BTC/USDC", Quantity: 0.2, Side: "long"},
 			},
 			OptionPositions: make(map[string]*OptionPosition),
 		},
 	}
 	cfgStrategies := []StrategyConfig{
-		{ID: "sma-btc", Type: "spot", Args: []string{"sma_crossover", "BTC/USDT"}},
-		{ID: "momentum-btc", Type: "spot", Args: []string{"momentum", "BTC/USDT"}},
+		{ID: "sma-btc", Type: "spot", Args: []string{"sma_crossover", "BTC/USDC"}},
+		{ID: "momentum-btc", Type: "spot", Args: []string{"momentum", "BTC/USDC"}},
 	}
-	prices := map[string]float64{"BTC/USDT": 50000}
+	prices := map[string]float64{"BTC/USDC": 50000}
 	corrCfg := &CorrelationConfig{Enabled: true, MaxConcentrationPct: 60, MaxSameDirectionPct: 75}
 
 	snap := ComputeCorrelation(strategies, cfgStrategies, prices, corrCfg)
@@ -60,7 +60,7 @@ func TestComputeCorrelation_MixedDirections(t *testing.T) {
 			ID:   "long-btc",
 			Type: "spot",
 			Positions: map[string]*Position{
-				"BTC/USDT": {Symbol: "BTC/USDT", Quantity: 0.1, Side: "long"},
+				"BTC/USDC": {Symbol: "BTC/USDC", Quantity: 0.1, Side: "long"},
 			},
 			OptionPositions: make(map[string]*OptionPosition),
 		},
@@ -74,10 +74,10 @@ func TestComputeCorrelation_MixedDirections(t *testing.T) {
 		},
 	}
 	cfgStrategies := []StrategyConfig{
-		{ID: "long-btc", Type: "spot", Args: []string{"sma", "BTC/USDT"}},
+		{ID: "long-btc", Type: "spot", Args: []string{"sma", "BTC/USDC"}},
 		{ID: "short-btc", Type: "perps", Args: []string{"momentum", "BTC"}},
 	}
-	prices := map[string]float64{"BTC/USDT": 50000}
+	prices := map[string]float64{"BTC/USDC": 50000}
 	corrCfg := &CorrelationConfig{Enabled: true, MaxConcentrationPct: 60, MaxSameDirectionPct: 75}
 
 	snap := ComputeCorrelation(strategies, cfgStrategies, prices, corrCfg)
@@ -137,7 +137,7 @@ func TestComputeCorrelation_OptionsGreeks(t *testing.T) {
 	cfgStrategies := []StrategyConfig{
 		{ID: "deribit-strat", Type: "options", Args: []string{"iron_condor", "BTC"}},
 	}
-	prices := map[string]float64{"BTC/USDT": 50000}
+	prices := map[string]float64{"BTC/USDC": 50000}
 	corrCfg := &CorrelationConfig{Enabled: true, MaxConcentrationPct: 60, MaxSameDirectionPct: 75}
 
 	snap := ComputeCorrelation(strategies, cfgStrategies, prices, corrCfg)
@@ -161,15 +161,15 @@ func TestComputeCorrelation_WarningThresholds(t *testing.T) {
 			ID:   "strat1",
 			Type: "spot",
 			Positions: map[string]*Position{
-				"BTC/USDT": {Symbol: "BTC/USDT", Quantity: 0.1, Side: "long"},
+				"BTC/USDC": {Symbol: "BTC/USDC", Quantity: 0.1, Side: "long"},
 			},
 			OptionPositions: make(map[string]*OptionPosition),
 		},
 	}
 	cfgStrategies := []StrategyConfig{
-		{ID: "strat1", Type: "spot", Args: []string{"sma", "BTC/USDT"}},
+		{ID: "strat1", Type: "spot", Args: []string{"sma", "BTC/USDC"}},
 	}
-	prices := map[string]float64{"BTC/USDT": 50000}
+	prices := map[string]float64{"BTC/USDC": 50000}
 
 	// Set threshold above 100% — no warning should fire.
 	corrCfg := &CorrelationConfig{Enabled: true, MaxConcentrationPct: 110, MaxSameDirectionPct: 110}
@@ -196,9 +196,9 @@ func TestComputeCorrelation_NoPositions(t *testing.T) {
 		},
 	}
 	cfgStrategies := []StrategyConfig{
-		{ID: "empty", Type: "spot", Args: []string{"sma", "BTC/USDT"}},
+		{ID: "empty", Type: "spot", Args: []string{"sma", "BTC/USDC"}},
 	}
-	prices := map[string]float64{"BTC/USDT": 50000}
+	prices := map[string]float64{"BTC/USDC": 50000}
 	corrCfg := &CorrelationConfig{Enabled: true, MaxConcentrationPct: 60, MaxSameDirectionPct: 75}
 
 	snap := ComputeCorrelation(strategies, cfgStrategies, prices, corrCfg)
@@ -220,7 +220,7 @@ func TestComputeCorrelation_MultiAsset(t *testing.T) {
 			ID:   "btc-strat",
 			Type: "spot",
 			Positions: map[string]*Position{
-				"BTC/USDT": {Symbol: "BTC/USDT", Quantity: 0.1, Side: "long"},
+				"BTC/USDC": {Symbol: "BTC/USDC", Quantity: 0.1, Side: "long"},
 			},
 			OptionPositions: make(map[string]*OptionPosition),
 		},
@@ -228,16 +228,16 @@ func TestComputeCorrelation_MultiAsset(t *testing.T) {
 			ID:   "eth-strat",
 			Type: "spot",
 			Positions: map[string]*Position{
-				"ETH/USDT": {Symbol: "ETH/USDT", Quantity: 1.0, Side: "long"},
+				"ETH/USDC": {Symbol: "ETH/USDC", Quantity: 1.0, Side: "long"},
 			},
 			OptionPositions: make(map[string]*OptionPosition),
 		},
 	}
 	cfgStrategies := []StrategyConfig{
-		{ID: "btc-strat", Type: "spot", Args: []string{"sma", "BTC/USDT"}},
-		{ID: "eth-strat", Type: "spot", Args: []string{"sma", "ETH/USDT"}},
+		{ID: "btc-strat", Type: "spot", Args: []string{"sma", "BTC/USDC"}},
+		{ID: "eth-strat", Type: "spot", Args: []string{"sma", "ETH/USDC"}},
 	}
-	prices := map[string]float64{"BTC/USDT": 50000, "ETH/USDT": 3000}
+	prices := map[string]float64{"BTC/USDC": 50000, "ETH/USDC": 3000}
 	corrCfg := &CorrelationConfig{Enabled: true, MaxConcentrationPct: 60, MaxSameDirectionPct: 75}
 
 	snap := ComputeCorrelation(strategies, cfgStrategies, prices, corrCfg)
@@ -272,7 +272,7 @@ func TestComputeCorrelation_SameDirectionWarning(t *testing.T) {
 			ID:   "s1",
 			Type: "spot",
 			Positions: map[string]*Position{
-				"BTC/USDT": {Symbol: "BTC/USDT", Quantity: 0.1, Side: "long"},
+				"BTC/USDC": {Symbol: "BTC/USDC", Quantity: 0.1, Side: "long"},
 			},
 			OptionPositions: make(map[string]*OptionPosition),
 		},
@@ -280,7 +280,7 @@ func TestComputeCorrelation_SameDirectionWarning(t *testing.T) {
 			ID:   "s2",
 			Type: "spot",
 			Positions: map[string]*Position{
-				"BTC/USDT": {Symbol: "BTC/USDT", Quantity: 0.1, Side: "long"},
+				"BTC/USDC": {Symbol: "BTC/USDC", Quantity: 0.1, Side: "long"},
 			},
 			OptionPositions: make(map[string]*OptionPosition),
 		},
@@ -288,7 +288,7 @@ func TestComputeCorrelation_SameDirectionWarning(t *testing.T) {
 			ID:   "s3",
 			Type: "spot",
 			Positions: map[string]*Position{
-				"BTC/USDT": {Symbol: "BTC/USDT", Quantity: 0.1, Side: "long"},
+				"BTC/USDC": {Symbol: "BTC/USDC", Quantity: 0.1, Side: "long"},
 			},
 			OptionPositions: make(map[string]*OptionPosition),
 		},
@@ -302,12 +302,12 @@ func TestComputeCorrelation_SameDirectionWarning(t *testing.T) {
 		},
 	}
 	cfgStrategies := []StrategyConfig{
-		{ID: "s1", Type: "spot", Args: []string{"sma", "BTC/USDT"}},
-		{ID: "s2", Type: "spot", Args: []string{"ema", "BTC/USDT"}},
-		{ID: "s3", Type: "spot", Args: []string{"rsi", "BTC/USDT"}},
+		{ID: "s1", Type: "spot", Args: []string{"sma", "BTC/USDC"}},
+		{ID: "s2", Type: "spot", Args: []string{"ema", "BTC/USDC"}},
+		{ID: "s3", Type: "spot", Args: []string{"rsi", "BTC/USDC"}},
 		{ID: "s4", Type: "perps", Args: []string{"momentum", "BTC"}},
 	}
-	prices := map[string]float64{"BTC/USDT": 50000}
+	prices := map[string]float64{"BTC/USDC": 50000}
 	corrCfg := &CorrelationConfig{Enabled: true, MaxConcentrationPct: 100, MaxSameDirectionPct: 70}
 
 	snap := ComputeCorrelation(strategies, cfgStrategies, prices, corrCfg)
@@ -351,7 +351,7 @@ func TestComputeCorrelation_OptionsCoarseDelta(t *testing.T) {
 	cfgStrategies := []StrategyConfig{
 		{ID: "opt-strat", Type: "options", Args: []string{"straddle", "BTC"}},
 	}
-	prices := map[string]float64{"BTC/USDT": 50000}
+	prices := map[string]float64{"BTC/USDC": 50000}
 	corrCfg := &CorrelationConfig{Enabled: true, MaxConcentrationPct: 60, MaxSameDirectionPct: 75}
 
 	snap := ComputeCorrelation(strategies, cfgStrategies, prices, corrCfg)
@@ -375,15 +375,15 @@ func TestComputeCorrelation_NilConfig(t *testing.T) {
 			ID:   "sma-btc",
 			Type: "spot",
 			Positions: map[string]*Position{
-				"BTC/USDT": {Symbol: "BTC/USDT", Quantity: 0.1, Side: "long"},
+				"BTC/USDC": {Symbol: "BTC/USDC", Quantity: 0.1, Side: "long"},
 			},
 			OptionPositions: make(map[string]*OptionPosition),
 		},
 	}
 	cfgStrategies := []StrategyConfig{
-		{ID: "sma-btc", Type: "spot", Args: []string{"sma_crossover", "BTC/USDT"}},
+		{ID: "sma-btc", Type: "spot", Args: []string{"sma_crossover", "BTC/USDC"}},
 	}
-	prices := map[string]float64{"BTC/USDT": 50000}
+	prices := map[string]float64{"BTC/USDC": 50000}
 
 	// nil corrCfg should not panic and should produce exposures without warnings.
 	snap := ComputeCorrelation(strategies, cfgStrategies, prices, nil)

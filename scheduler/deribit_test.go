@@ -256,7 +256,7 @@ func TestApplyAssignmentCall(t *testing.T) {
 
 func TestFetchMarkPricesExpiredOTM(t *testing.T) {
 	// Mock pricer that returns spot price
-	prices := map[string]float64{"BTC/USDT": 60000}
+	prices := map[string]float64{"BTC/USDC": 60000}
 	pricer := NewIBKRPricer(prices)
 
 	lm, _ := NewLogManager("")
@@ -294,7 +294,7 @@ func TestFetchMarkPricesExpiredOTM(t *testing.T) {
 }
 
 func TestFetchMarkPricesExpiredITMPut(t *testing.T) {
-	prices := map[string]float64{"BTC/USDT": 45000}
+	prices := map[string]float64{"BTC/USDC": 45000}
 	pricer := NewIBKRPricer(prices)
 
 	lm, _ := NewLogManager("")

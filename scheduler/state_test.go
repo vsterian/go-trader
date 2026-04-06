@@ -89,10 +89,10 @@ func TestSaveAndLoadStateRoundTrip(t *testing.T) {
 		Cash:           950.5,
 		InitialCapital: 1000,
 		Positions: map[string]*Position{
-			"BTC/USDT": {Symbol: "BTC/USDT", Quantity: 0.01, AvgCost: 50000, Side: "long"},
+			"BTC/USDC": {Symbol: "BTC/USDC", Quantity: 0.01, AvgCost: 50000, Side: "long"},
 		},
 		OptionPositions: make(map[string]*OptionPosition),
-		TradeHistory:    []Trade{{StrategyID: "test-btc", Symbol: "BTC/USDT", Side: "buy"}},
+		TradeHistory:    []Trade{{StrategyID: "test-btc", Symbol: "BTC/USDC", Side: "buy"}},
 	}
 
 	if err := SaveState(path, state); err != nil {
@@ -114,9 +114,9 @@ func TestSaveAndLoadStateRoundTrip(t *testing.T) {
 	if s.Cash != 950.5 {
 		t.Errorf("Cash = %g, want 950.5", s.Cash)
 	}
-	pos := s.Positions["BTC/USDT"]
+	pos := s.Positions["BTC/USDC"]
 	if pos == nil {
-		t.Fatal("Position BTC/USDT not found")
+		t.Fatal("Position BTC/USDC not found")
 	}
 	if pos.Quantity != 0.01 {
 		t.Errorf("Quantity = %g, want 0.01", pos.Quantity)
@@ -243,9 +243,9 @@ func TestValidateState(t *testing.T) {
 		InitialCapital: -100, // invalid
 		Cash:           -50,  // negative
 		Positions: map[string]*Position{
-			"BTC/USDT": {Quantity: 0.01, Side: "long"},
-			"ETH/USDT": {Quantity: 0, Side: "long"},   // invalid: zero
-			"SOL/USDT": {Quantity: -1, Side: "short"}, // invalid: negative
+			"BTC/USDC": {Quantity: 0.01, Side: "long"},
+			"ETH/USDC": {Quantity: 0, Side: "long"},   // invalid: zero
+			"SOL/USDC": {Quantity: -1, Side: "short"}, // invalid: negative
 		},
 		OptionPositions: map[string]*OptionPosition{
 			"valid":   {Action: "buy", OptionType: "call", Quantity: 1},
@@ -265,13 +265,13 @@ func TestValidateState(t *testing.T) {
 	if s.Cash != 0 {
 		t.Errorf("Cash should be clamped to 0, got %g", s.Cash)
 	}
-	if _, ok := s.Positions["BTC/USDT"]; !ok {
-		t.Error("valid position BTC/USDT should remain")
+	if _, ok := s.Positions["BTC/USDC"]; !ok {
+		t.Error("valid position BTC/USDC should remain")
 	}
-	if _, ok := s.Positions["ETH/USDT"]; ok {
+	if _, ok := s.Positions["ETH/USDC"]; ok {
 		t.Error("zero-quantity position should be removed")
 	}
-	if _, ok := s.Positions["SOL/USDT"]; ok {
+	if _, ok := s.Positions["SOL/USDC"]; ok {
 		t.Error("negative-quantity position should be removed")
 	}
 	if _, ok := s.OptionPositions["valid"]; !ok {
@@ -437,4 +437,207 @@ func TestSavePlatformStatesNoPlatforms(t *testing.T) {
 	if loaded.CycleCount != 7 {
 		t.Errorf("CycleCount = %d, want 7", loaded.CycleCount)
 	}
+}
+
+// TestLoadPlatformStatesFallback verifies that strategies whose platform is not in the
+// platforms map are still loaded from the fallback state file (cfg.StateFile).
+// This prevents state loss when a new platform is added without listing existing platforms.
+func TestLoadPlatformStatesFallback(t *testing.T) {
+dir := t.TempDir()
+
+// Create a fallback state file with binanceus strategies (simulating old state.json).
+fallbackPath := filepath.Join(dir, "state.json")
+oldState := NewAppState()
+oldState.CycleCount = 50
+oldState.Strategies["rsi-eth"] = &StrategyState{
+ID:       "rsi-eth",
+Platform: "binanceus",
+Cash:     4.91,
+Positions: map[string]*Position{
+"ETH/USDC": {Symbol: "ETH/USDC", Quantity: 0.046044, AvgCost: 2063.23, Side: "long"},
+},
+OptionPositions: make(map[string]*OptionPosition),
+TradeHistory:    []Trade{{StrategyID: "rsi-eth", Side: "buy", Quantity: 0.046044}},
+}
+SaveState(fallbackPath, oldState)
+
+// Create an alpaca state file.
+alpacaDir := filepath.Join(dir, "platforms", "alpaca")
+os.MkdirAll(alpacaDir, 0755)
+alpacaState := NewAppState()
+alpacaState.CycleCount = 5
+alpacaState.Strategies["alpaca-sma-spy"] = &StrategyState{
+ID: "alpaca-sma-spy", Platform: "alpaca", Cash: 1000,
+Positions: make(map[string]*Position), OptionPositions: make(map[string]*OptionPosition),
+TradeHistory: []Trade{},
+}
+SaveState(filepath.Join(alpacaDir, "state.json"), alpacaState)
+
+// Config only has alpaca — binanceus NOT listed (this is the bug scenario).
+cfg := &Config{
+StateFile: fallbackPath,
+Platforms: map[string]*PlatformConfig{
+"alpaca": {StateFile: filepath.Join(alpacaDir, "state.json")},
+},
+}
+
+merged, err := LoadPlatformStates(cfg)
+if err != nil {
+t.Fatalf("LoadPlatformStates failed: %v", err)
+}
+
+// Both strategies should be present.
+if _, ok := merged.Strategies["rsi-eth"]; !ok {
+t.Error("rsi-eth should be loaded from fallback state file")
+}
+if _, ok := merged.Strategies["alpaca-sma-spy"]; !ok {
+t.Error("alpaca-sma-spy should be loaded from platform state file")
+}
+
+// Verify the position was preserved.
+rsi := merged.Strategies["rsi-eth"]
+if pos, ok := rsi.Positions["ETH/USDC"]; !ok {
+t.Error("ETH/USDC position should be preserved")
+} else if pos.Quantity != 0.046044 {
+t.Errorf("ETH position quantity = %f, want 0.046044", pos.Quantity)
+}
+if rsi.Cash != 4.91 {
+t.Errorf("rsi-eth cash = %f, want 4.91", rsi.Cash)
+}
+
+// Cycle count should be max(50, 5) = 50.
+if merged.CycleCount != 50 {
+t.Errorf("CycleCount = %d, want 50", merged.CycleCount)
+}
+}
+
+// TestSavePlatformStatesFallback verifies that strategies whose platform is not in the
+// platforms map are saved to the fallback state file instead of being silently dropped.
+func TestSavePlatformStatesFallback(t *testing.T) {
+dir := t.TempDir()
+fallbackPath := filepath.Join(dir, "state.json")
+
+alpacaDir := filepath.Join(dir, "platforms", "alpaca")
+
+cfg := &Config{
+StateFile: fallbackPath,
+Platforms: map[string]*PlatformConfig{
+"alpaca": {StateFile: filepath.Join(alpacaDir, "state.json")},
+},
+}
+
+state := NewAppState()
+state.CycleCount = 20
+state.Strategies["rsi-eth"] = &StrategyState{
+ID: "rsi-eth", Platform: "binanceus", Cash: 4.91,
+Positions: map[string]*Position{
+"ETH/USDC": {Symbol: "ETH/USDC", Quantity: 0.046044, AvgCost: 2063.23, Side: "long"},
+},
+OptionPositions: make(map[string]*OptionPosition),
+TradeHistory:    []Trade{},
+}
+state.Strategies["alpaca-sma-spy"] = &StrategyState{
+ID: "alpaca-sma-spy", Platform: "alpaca", Cash: 1000,
+Positions: make(map[string]*Position), OptionPositions: make(map[string]*OptionPosition),
+TradeHistory: []Trade{},
+}
+
+if err := SavePlatformStates(state, cfg); err != nil {
+t.Fatalf("SavePlatformStates failed: %v", err)
+}
+
+// Verify alpaca state file has only alpaca strategies.
+alpacaLoaded, err := LoadState(filepath.Join(alpacaDir, "state.json"))
+if err != nil {
+t.Fatal(err)
+}
+if _, ok := alpacaLoaded.Strategies["alpaca-sma-spy"]; !ok {
+t.Error("alpaca-sma-spy should be in alpaca state file")
+}
+if _, ok := alpacaLoaded.Strategies["rsi-eth"]; ok {
+t.Error("rsi-eth should NOT be in alpaca state file")
+}
+
+// Verify fallback state file has binanceus strategies.
+fallbackLoaded, err := LoadState(fallbackPath)
+if err != nil {
+t.Fatal(err)
+}
+if _, ok := fallbackLoaded.Strategies["rsi-eth"]; !ok {
+t.Error("rsi-eth should be saved to fallback state file")
+}
+if pos, ok := fallbackLoaded.Strategies["rsi-eth"].Positions["ETH/USDC"]; !ok {
+t.Error("ETH/USDC position should be preserved in fallback")
+} else if pos.Quantity != 0.046044 {
+t.Errorf("ETH position quantity = %f, want 0.046044", pos.Quantity)
+}
+}
+
+// TestBackupStateFiles verifies that backup creates .bak files.
+func TestBackupStateFiles(t *testing.T) {
+dir := t.TempDir()
+stateFile := filepath.Join(dir, "state.json")
+
+// Create a state file.
+state := NewAppState()
+state.CycleCount = 42
+SaveState(stateFile, state)
+
+cfg := &Config{StateFile: stateFile}
+BackupStateFiles(cfg)
+
+// Verify .bak exists and has same content.
+bakData, err := os.ReadFile(stateFile + ".bak")
+if err != nil {
+t.Fatalf("backup file not created: %v", err)
+}
+origData, _ := os.ReadFile(stateFile)
+if string(bakData) != string(origData) {
+t.Error("backup file content doesn't match original")
+}
+}
+
+// TestLoadPlatformStatesFallbackOverride verifies that platform-specific state
+// overrides fallback entries for the same strategy ID.
+func TestLoadPlatformStatesFallbackOverride(t *testing.T) {
+dir := t.TempDir()
+
+// Fallback has an older version of alpaca-sma-spy.
+fallbackPath := filepath.Join(dir, "state.json")
+oldState := NewAppState()
+oldState.Strategies["alpaca-sma-spy"] = &StrategyState{
+ID: "alpaca-sma-spy", Platform: "alpaca", Cash: 500,
+Positions: make(map[string]*Position), OptionPositions: make(map[string]*OptionPosition),
+TradeHistory: []Trade{},
+}
+SaveState(fallbackPath, oldState)
+
+// Platform file has the newer version.
+alpacaDir := filepath.Join(dir, "platforms", "alpaca")
+os.MkdirAll(alpacaDir, 0755)
+alpacaState := NewAppState()
+alpacaState.Strategies["alpaca-sma-spy"] = &StrategyState{
+ID: "alpaca-sma-spy", Platform: "alpaca", Cash: 900,
+Positions: make(map[string]*Position), OptionPositions: make(map[string]*OptionPosition),
+TradeHistory: []Trade{},
+}
+SaveState(filepath.Join(alpacaDir, "state.json"), alpacaState)
+
+cfg := &Config{
+StateFile: fallbackPath,
+Platforms: map[string]*PlatformConfig{
+"alpaca": {StateFile: filepath.Join(alpacaDir, "state.json")},
+},
+}
+
+merged, err := LoadPlatformStates(cfg)
+if err != nil {
+t.Fatal(err)
+}
+
+// Platform-specific version should win (cash=900, not 500).
+s := merged.Strategies["alpaca-sma-spy"]
+if s.Cash != 900 {
+t.Errorf("alpaca-sma-spy cash = %f, want 900 (platform file should override fallback)", s.Cash)
+}
 }

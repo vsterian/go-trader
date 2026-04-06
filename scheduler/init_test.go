@@ -274,7 +274,7 @@ func TestGenerateConfig_SpotScriptAndArgs(t *testing.T) {
 	if s.Script != "shared_scripts/check_strategy.py" {
 		t.Errorf("expected check_strategy.py, got %s", s.Script)
 	}
-	if len(s.Args) != 3 || s.Args[0] != "momentum" || s.Args[1] != "BTC/USDT" || s.Args[2] != "1h" {
+	if len(s.Args) != 3 || s.Args[0] != "momentum" || s.Args[1] != "BTC/USDC" || s.Args[2] != "1h" {
 		t.Errorf("unexpected spot args: %v", s.Args)
 	}
 }
@@ -862,4 +862,84 @@ func TestValidateConfig_NoCapitalNoCapitalPct(t *testing.T) {
 	if err := ValidateConfig(cfg); err == nil {
 		t.Error("expected validation error when neither capital nor capital_pct is set")
 	}
+}
+
+func TestGenerateConfig_BinanceLive(t *testing.T) {
+opts := InitOptions{
+EnableSpot:     true,
+Assets:         []string{"BTC"},
+SpotStrategies: []string{"sma_crossover"},
+SpotCapital:    1000,
+SpotDrawdown:   60,
+BinanceLive:    true,
+}
+cfg := generateConfig(opts)
+if len(cfg.Strategies) != 1 {
+t.Fatalf("expected 1 strategy, got %d", len(cfg.Strategies))
+}
+sc := cfg.Strategies[0]
+if sc.Platform != "binanceus" {
+t.Errorf("Platform = %q, want binanceus", sc.Platform)
+}
+found := false
+for _, arg := range sc.Args {
+if arg == "--mode=live" {
+found = true
+}
+}
+if !found {
+t.Errorf("expected --mode=live in args %v", sc.Args)
+}
+}
+
+func TestGenerateConfig_BinancePaper(t *testing.T) {
+opts := InitOptions{
+EnableSpot:     true,
+Assets:         []string{"BTC"},
+SpotStrategies: []string{"sma_crossover"},
+SpotCapital:    1000,
+SpotDrawdown:   60,
+BinanceLive:    false,
+}
+cfg := generateConfig(opts)
+if len(cfg.Strategies) != 1 {
+t.Fatalf("expected 1 strategy, got %d", len(cfg.Strategies))
+}
+for _, arg := range cfg.Strategies[0].Args {
+if arg == "--mode=live" {
+t.Error("paper mode should NOT have --mode=live")
+}
+}
+}
+
+func TestGenerateConfig_BinanceLivePairs(t *testing.T) {
+opts := InitOptions{
+EnableSpot:     true,
+Assets:         []string{"BTC", "ETH"},
+SpotStrategies: []string{"sma_crossover"},
+SpotCapital:    1000,
+SpotDrawdown:   60,
+IncludePairs:   true,
+BinanceLive:    true,
+}
+cfg := generateConfig(opts)
+// 2 spot + 1 pair = 3
+pairsFound := false
+for _, sc := range cfg.Strategies {
+if sc.ID == "pairs-btc-eth" {
+pairsFound = true
+hasLive := false
+for _, arg := range sc.Args {
+if arg == "--mode=live" {
+hasLive = true
+}
+}
+if !hasLive {
+t.Error("pairs strategy should have --mode=live when BinanceLive=true")
+}
+}
+}
+if !pairsFound {
+t.Error("expected pairs-btc-eth strategy")
+}
 }

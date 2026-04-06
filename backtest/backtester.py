@@ -76,7 +76,7 @@ class Backtester:
         self.slippage_pct = slippage_pct
 
     def run(self, df: pd.DataFrame, strategy_name: str = "Unknown",
-            symbol: str = "BTC/USDT", timeframe: str = "1d",
+            symbol: str = "BTC/USDC", timeframe: str = "1d",
             params: Optional[dict] = None, save: bool = True) -> dict:
         """
         Run backtest on a DataFrame that already has a 'signal' column.

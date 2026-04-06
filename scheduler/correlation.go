@@ -66,7 +66,7 @@ func ComputeCorrelation(strategies map[string]*StrategyState, cfgStrategies []St
 		switch sc.Type {
 		case "spot", "perps":
 			for _, pos := range ss.Positions {
-				posAsset := strings.TrimSuffix(strings.ToUpper(pos.Symbol), "/USDT")
+				posAsset := strings.TrimSuffix(strings.ToUpper(pos.Symbol), "/USDC")
 				if posAsset != asset {
 					continue
 				}
@@ -175,7 +175,7 @@ func ComputeCorrelation(strategies map[string]*StrategyState, cfgStrategies []St
 // findSpotPrice finds a price for the given asset (e.g. "BTC") from the prices map.
 func findSpotPrice(asset string, prices map[string]float64) float64 {
 	// Try common symbol formats.
-	if p, ok := prices[asset+"/USDT"]; ok {
+	if p, ok := prices[asset+"/USDC"]; ok {
 		return p
 	}
 	if p, ok := prices[asset]; ok {

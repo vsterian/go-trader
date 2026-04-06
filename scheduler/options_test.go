@@ -66,7 +66,7 @@ func TestEncodeAllPositionsJSON(t *testing.T) {
 		},
 	}
 	spotPos := map[string]*Position{
-		"BTC/USDT": {Symbol: "BTC/USDT", Quantity: 0.5, AvgCost: 50000, Side: "long"},
+		"BTC/USDC": {Symbol: "BTC/USDC", Quantity: 0.5, AvgCost: 50000, Side: "long"},
 	}
 
 	got := EncodeAllPositionsJSON(optPos, spotPos)
@@ -84,8 +84,8 @@ func TestEncodeAllPositionsJSON(t *testing.T) {
 	for _, entry := range parsed {
 		if entry["position_type"] == "spot" {
 			foundSpot = true
-			if entry["symbol"] != "BTC/USDT" {
-				t.Errorf("symbol = %v, want %q", entry["symbol"], "BTC/USDT")
+			if entry["symbol"] != "BTC/USDC" {
+				t.Errorf("symbol = %v, want %q", entry["symbol"], "BTC/USDC")
 			}
 		}
 	}

@@ -20,6 +20,15 @@ type AppState struct {
 	CorrelationSnapshot *CorrelationSnapshot      `json:"correlation_snapshot,omitempty"`
 }
 
+// MLState tracks the ML model status for a strategy.
+type MLState struct {
+	IsModelTrained  bool      `json:"is_model_trained"`
+	TrainingSamples int       `json:"training_samples"`
+	LastOptimization time.Time `json:"last_optimization,omitempty"`
+	CurrentWinRate  float64   `json:"current_win_rate"`
+	AdaptationCount int       `json:"adaptation_count"`
+}
+
 // StrategyState is the per-strategy persistent state.
 type StrategyState struct {
 	ID              string                     `json:"id"`
@@ -31,6 +40,7 @@ type StrategyState struct {
 	OptionPositions map[string]*OptionPosition `json:"option_positions"`
 	TradeHistory    []Trade                    `json:"trade_history"`
 	RiskState       RiskState                  `json:"risk_state"`
+	MLState         *MLState                   `json:"ml_state,omitempty"`
 }
 
 func NewStrategyState(cfg StrategyConfig) *StrategyState {
@@ -128,12 +138,32 @@ func ValidateState(state *AppState) {
 
 // LoadPlatformStates loads state from per-platform state files and merges them into one AppState.
 // Falls back to cfg.StateFile for backwards compatibility when no platforms are configured.
+// When platforms are configured, strategies whose platform is NOT in the map are loaded from
+// cfg.StateFile as a fallback to prevent silent state loss.
 func LoadPlatformStates(cfg *Config) (*AppState, error) {
 	if len(cfg.Platforms) == 0 {
 		return LoadState(cfg.StateFile)
 	}
 
 	merged := NewAppState()
+
+	// Always load the fallback state file first — this captures strategies whose
+	// platform is not in the platforms map (e.g. binanceus strategies when only
+	// alpaca is listed).
+	fallback, err := LoadState(cfg.StateFile)
+	if err != nil && !os.IsNotExist(err) {
+		fmt.Printf("[WARN] state: could not load fallback %s: %v\n", cfg.StateFile, err)
+	}
+	if fallback != nil {
+		for id, stratState := range fallback.Strategies {
+			merged.Strategies[id] = stratState
+		}
+		merged.CycleCount = fallback.CycleCount
+		merged.LastCycle = fallback.LastCycle
+		merged.PortfolioRisk = fallback.PortfolioRisk
+	}
+
+	// Then load each configured platform's state file, overriding any fallback entries.
 	for name, pc := range cfg.Platforms {
 		stateFile := pc.StateFile
 		if stateFile == "" {
@@ -164,6 +194,7 @@ func LoadPlatformStates(cfg *Config) (*AppState, error) {
 
 // SavePlatformStates splits the merged AppState by platform and saves each platform's state file.
 // Falls back to cfg.StateFile for backwards compatibility when no platforms are configured.
+// Strategies whose platform is NOT in the platforms map are saved to cfg.StateFile as a fallback.
 func SavePlatformStates(state *AppState, cfg *Config) error {
 	if len(cfg.Platforms) == 0 {
 		return SaveState(cfg.StateFile, state)
@@ -180,6 +211,14 @@ func SavePlatformStates(state *AppState, cfg *Config) error {
 		}
 	}
 
+	// Fallback state for strategies whose platform isn't in the platforms map.
+	fallback := &AppState{
+		CycleCount:    state.CycleCount,
+		LastCycle:     state.LastCycle,
+		Strategies:    make(map[string]*StrategyState),
+		PortfolioRisk: state.PortfolioRisk,
+	}
+
 	// Assign each strategy to its platform.
 	for id, s := range state.Strategies {
 		platform := s.Platform
@@ -188,6 +227,8 @@ func SavePlatformStates(state *AppState, cfg *Config) error {
 		}
 		if ps, ok := platformStates[platform]; ok {
 			ps.Strategies[id] = s
+		} else {
+			fallback.Strategies[id] = s
 		}
 	}
 
@@ -201,7 +242,43 @@ func SavePlatformStates(state *AppState, cfg *Config) error {
 			return fmt.Errorf("platform %s: %w", name, err)
 		}
 	}
+
+	// Save fallback state for unmapped platforms.
+	if len(fallback.Strategies) > 0 {
+		if err := SaveState(cfg.StateFile, fallback); err != nil {
+			return fmt.Errorf("fallback state: %w", err)
+		}
+	}
 	return nil
+}
+
+// BackupStateFiles copies all platform state files to .bak equivalents.
+// Called periodically (every backupIntervalCycles cycles) and on shutdown.
+func BackupStateFiles(cfg *Config) {
+	if len(cfg.Platforms) == 0 {
+		copyFile(cfg.StateFile, cfg.StateFile+".bak")
+		return
+	}
+	// Backup fallback state file
+	copyFile(cfg.StateFile, cfg.StateFile+".bak")
+	// Backup each platform state file
+	for name, pc := range cfg.Platforms {
+		stateFile := pc.StateFile
+		if stateFile == "" {
+			stateFile = fmt.Sprintf("platforms/%s/state.json", name)
+		}
+		copyFile(stateFile, stateFile+".bak")
+	}
+}
+
+func copyFile(src, dst string) {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return // source doesn't exist yet — skip
+	}
+	if err := os.WriteFile(dst, data, 0600); err != nil {
+		fmt.Printf("[WARN] backup: failed to copy %s → %s: %v\n", src, dst, err)
+	}
 }
 
 func SaveState(path string, state *AppState) error {

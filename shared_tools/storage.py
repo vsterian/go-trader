@@ -41,6 +41,38 @@ def init_db(db_path: str = DB_PATH):
         CREATE INDEX IF NOT EXISTS idx_ohlcv_lookup
             ON ohlcv(exchange, symbol, timeframe, timestamp);
 
+        CREATE TABLE IF NOT EXISTS ml_models (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            strategy_id TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            model_path TEXT,
+            training_samples INTEGER DEFAULT 0,
+            last_trained TEXT,
+            win_rate REAL,
+            profit_factor REAL,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(strategy_id, symbol)
+        );
+
+        CREATE TABLE IF NOT EXISTS ml_predictions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT DEFAULT (datetime('now')),
+            strategy_id TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            rule_signal INTEGER,
+            ml_signal INTEGER,
+            buy_probability REAL,
+            sell_probability REAL,
+            dynamic_buy_threshold REAL,
+            dynamic_sell_threshold REAL,
+            outcome_profit_pct REAL,
+            outcome_profitable INTEGER
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_ml_predictions_lookup
+            ON ml_predictions(strategy_id, symbol, timestamp);
+
         CREATE TABLE IF NOT EXISTS backtest_results (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             strategy_name TEXT NOT NULL,
@@ -164,6 +196,80 @@ def get_backtest_results(strategy_name: Optional[str] = None,
     df = pd.read_sql_query(query, conn, params=params)
     conn.close()
     return df
+
+
+def store_ml_model_info(strategy_id: str, symbol: str, model_path: str,
+                        training_samples: int, win_rate: Optional[float] = None,
+                        profit_factor: Optional[float] = None,
+                        db_path: str = DB_PATH):
+    """Store or update ML model metadata."""
+    conn = get_connection(db_path)
+    conn.execute("""
+        INSERT INTO ml_models (strategy_id, symbol, model_path, training_samples, win_rate, profit_factor, last_trained, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+        ON CONFLICT(strategy_id, symbol) DO UPDATE SET
+            model_path = excluded.model_path,
+            training_samples = excluded.training_samples,
+            win_rate = excluded.win_rate,
+            profit_factor = excluded.profit_factor,
+            last_trained = datetime('now'),
+            updated_at = datetime('now')
+    """, (strategy_id, symbol, model_path, training_samples, win_rate, profit_factor))
+    conn.commit()
+    conn.close()
+
+
+def get_ml_model_info(strategy_id: str, symbol: str,
+                      db_path: str = DB_PATH) -> Optional[dict]:
+    """Get ML model metadata. Returns None if no model found."""
+    conn = get_connection(db_path)
+    row = conn.execute(
+        "SELECT * FROM ml_models WHERE strategy_id=? AND symbol=?",
+        (strategy_id, symbol)
+    ).fetchone()
+    conn.close()
+    if row is None:
+        return None
+    cols = ["id", "strategy_id", "symbol", "model_path", "training_samples",
+            "last_trained", "win_rate", "profit_factor", "created_at", "updated_at"]
+    return dict(zip(cols, row))
+
+
+def store_ml_prediction(strategy_id: str, symbol: str, rule_signal: int,
+                        ml_signal: int, buy_probability: float,
+                        sell_probability: float,
+                        dynamic_buy_threshold: float = 0.0,
+                        dynamic_sell_threshold: float = 0.0,
+                        db_path: str = DB_PATH):
+    """Log an ML prediction for later outcome tracking."""
+    conn = get_connection(db_path)
+    conn.execute("""
+        INSERT INTO ml_predictions
+        (strategy_id, symbol, rule_signal, ml_signal, buy_probability,
+         sell_probability, dynamic_buy_threshold, dynamic_sell_threshold)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (strategy_id, symbol, rule_signal, ml_signal, buy_probability,
+          sell_probability, dynamic_buy_threshold, dynamic_sell_threshold))
+    conn.commit()
+    conn.close()
+
+
+def update_ml_prediction_outcome(strategy_id: str, symbol: str,
+                                 profit_pct: float, profitable: bool,
+                                 db_path: str = DB_PATH):
+    """Update the most recent unresolved prediction with the trade outcome."""
+    conn = get_connection(db_path)
+    conn.execute("""
+        UPDATE ml_predictions
+        SET outcome_profit_pct = ?, outcome_profitable = ?
+        WHERE id = (
+            SELECT id FROM ml_predictions
+            WHERE strategy_id = ? AND symbol = ? AND outcome_profitable IS NULL
+            ORDER BY timestamp DESC LIMIT 1
+        )
+    """, (profit_pct, int(profitable), strategy_id, symbol))
+    conn.commit()
+    conn.close()
 
 
 # Initialize DB on import

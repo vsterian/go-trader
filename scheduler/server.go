@@ -22,7 +22,7 @@ func NewStatusServer(state *AppState, mu *sync.RWMutex, statusToken string, stra
 	symbolSet := make(map[string]bool)
 	for _, sc := range strategies {
 		if sc.Type == "spot" && len(sc.Args) >= 2 {
-			symbolSet[sc.Args[1]] = true // e.g., "BTC/USDT"
+			symbolSet[sc.Args[1]] = true // e.g., "BTC/USDC"
 		}
 	}
 	symbols := make([]string, 0, len(symbolSet))

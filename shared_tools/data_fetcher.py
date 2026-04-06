@@ -23,7 +23,7 @@ def get_exchange(exchange_id: str = "binanceus") -> ccxt.Exchange:
 
 
 def fetch_ohlcv(
-    symbol: str = "BTC/USDT",
+    symbol: str = "BTC/USDC",
     timeframe: str = "1d",
     since: Optional[str] = None,
     limit: int = 500,
@@ -34,7 +34,7 @@ def fetch_ohlcv(
     Fetch OHLCV candles from exchange.
 
     Args:
-        symbol: Trading pair (e.g., 'BTC/USDT')
+        symbol: Trading pair (e.g., 'BTC/USDC')
         timeframe: Candle interval ('1m','5m','15m','1h','4h','1d','1w')
         since: Start date as ISO string (e.g., '2023-01-01')
         limit: Max candles per request (exchange limit usually 500-1000)
@@ -67,7 +67,7 @@ def fetch_ohlcv(
 
 
 def fetch_full_history(
-    symbol: str = "BTC/USDT",
+    symbol: str = "BTC/USDC",
     timeframe: str = "1d",
     since: str = "2020-01-01",
     exchange_id: str = "binanceus",
@@ -163,7 +163,7 @@ def fetch_full_history(
 
 
 def load_cached_data(
-    symbol: str = "BTC/USDT",
+    symbol: str = "BTC/USDC",
     timeframe: str = "1d",
     exchange_id: str = "binanceus",
     start_date: Optional[str] = None,
@@ -190,7 +190,7 @@ def load_cached_data(
 
 
 if __name__ == "__main__":
-    # Quick test: fetch recent BTC/USDT daily candles
-    df = fetch_ohlcv("BTC/USDT", "1d", limit=30)
+    # Quick test: fetch recent BTC/USDC daily candles
+    df = fetch_ohlcv("BTC/USDC", "1d", limit=30)
     print(f"\nFetched {len(df)} candles:")
     print(df.tail())

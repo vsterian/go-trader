@@ -16,9 +16,11 @@ A Go + Python hybrid trading system. A single Go binary (~8MB RAM) orchestrates 
 
 **Crypto** via Robinhood: spot crypto trading using the full strategy suite (SMA, EMA, RSI, MACD, etc.) — paper mode uses Yahoo Finance for OHLCV data, live mode places real orders via robin_stocks with TOTP MFA.
 
-**Discord alerts**: Per-platform channels for spot, options, hyperliquid, topstep, robinhood, and okx summaries, with immediate trade notifications. When a new release is detected, the bot DMs you directly — reply **yes** and it upgrades, rebuilds, and restarts itself automatically.
+**US Stocks** via Alpaca: commission-free stock trading (AAPL, SPY, MSFT, etc.) using the spot strategy suite — paper mode uses Alpaca paper endpoint, live mode places real orders via alpaca-py SDK.
 
-Supported platforms: Binance US, Deribit, IBKR/CME, Hyperliquid, TopStep, Robinhood.
+**Discord alerts**: Per-platform channels for spot, options, hyperliquid, topstep, robinhood, okx, and alpaca summaries, with immediate trade notifications. When a new release is detected, the bot DMs you directly — reply **yes** and it upgrades, rebuilds, and restarts itself automatically.
+
+Supported platforms: Binance US (live), Deribit, IBKR/CME, Hyperliquid, TopStep, Robinhood, OKX, Alpaca.
 
 ## Community
 
@@ -107,16 +109,17 @@ Go scheduler (always running, ~8MB idle)
   ↓ marks options to market via Deribit REST API (live prices every cycle)
   ↓ saves state → scheduler/state.json (atomic writes, survives restarts)
   ↓ HTTP status → localhost:8099/status
-  ↓ Discord → per-platform channels (spot, options, hyperliquid, topstep, robinhood, okx)
+  ↓ Discord → per-platform channels (spot, options, hyperliquid, topstep, robinhood, okx, alpaca)
 
 Platform adapters (Python):
-  platforms/binanceus/adapter.py   — spot (CCXT)
+  platforms/binanceus/adapter.py   — spot (CCXT, live trading)
   platforms/deribit/adapter.py     — options (live quotes, real expiries/strikes)
   platforms/ibkr/adapter.py        — options (CME Micro, Black-Scholes pricing)
   platforms/hyperliquid/adapter.py — perps (paper + live, SDK)
   platforms/topstep/adapter.py     — futures (CME, paper via yfinance + live via TopStepX)
   platforms/robinhood/adapter.py   — crypto (paper via yfinance + live via robin_stocks)
   platforms/okx/adapter.py         — spot + perps + options (CCXT, paper + live)
+  platforms/alpaca/adapter.py      — US stocks (paper + live, alpaca-py SDK)
 ```
 
 Python gets the quant libraries (pandas, numpy, scipy, CCXT). Go gets memory efficiency. 50+ strategies cost ~220MB peak for ~30 seconds, then ~8MB idle.
@@ -186,13 +189,19 @@ Paper mode uses public OKX API (no credentials). Live mode requires `OKX_API_KEY
 
 US equity options on SPY, QQQ, AAPL, etc. using the same options strategies as Deribit/IBKR (covered_calls, protective_puts, momentum_options, vol_mean_reversion, wheel, butterfly). Paper mode uses Black-Scholes pricing. Live mode uses robin_stocks for real options chains and greeks.
 
+### Alpaca US Stocks (spot strategies, 1h interval)
+
+Commission-free US stock trading (AAPL, SPY, MSFT, GOOGL, etc.) using the spot strategy suite. Paper mode uses Alpaca paper endpoint (virtual money, real market data). Live mode places real orders via alpaca-py SDK.
+
+Requires `ALPACA_PUBLIC_KEY` and `ALPACA_SECRET_KEY` env vars. No `__init__.py` in `platforms/alpaca/` — the directory shadows the installed `alpaca` package otherwise.
+
 ---
 
 ## Platforms
 
 | Platform | Type | Assets | Features |
 |----------|------|--------|----------|
-| Binance US | Spot | BTC, ETH, SOL | CCXT, paper trading |
+| Binance US | Spot | BTC, ETH, SOL | CCXT, paper + live trading |
 | Deribit | Options | BTC, ETH | Live quotes, real expiries/strikes |
 | IBKR/CME | Options | BTC, ETH | CME Micro contracts, Black-Scholes pricing |
 | Hyperliquid | Perps | BTC, ETH, SOL | Paper + live trading via SDK |
@@ -200,6 +209,7 @@ US equity options on SPY, QQQ, AAPL, etc. using the same options strategies as D
 | Robinhood | Crypto | BTC, ETH, SOL, DOGE, etc. | Paper (yfinance) + live trading via robin_stocks |
 | Robinhood | Options | SPY, QQQ, AAPL, MSFT, etc. | Paper (Black-Scholes) + live chains via robin_stocks |
 | OKX | Spot + Perps + Options | BTC, ETH, SOL | CCXT, paper + live, MiCA/EU licensed |
+| Alpaca | Spot (US Stocks) | AAPL, SPY, MSFT, GOOGL, etc. | Paper + live, commission-free, alpaca-py SDK |
 
 ---
 

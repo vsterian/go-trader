@@ -26,7 +26,7 @@ def _get_spot_price(underlying: str) -> float:
     """Fetch spot price via ccxt Binance US."""
     import ccxt
     exchange = ccxt.binanceus({"enableRateLimit": True})
-    for suffix in ("/USDT", "/USD"):
+    for suffix in ("/USDC", "/USD"):
         try:
             ticker = exchange.fetch_ticker(underlying + suffix)
             price = ticker.get("last") or 0
@@ -42,7 +42,7 @@ def _calc_vol_and_iv_rank(underlying: str) -> Tuple[float, float]:
     try:
         import ccxt
         exchange = ccxt.binanceus({"enableRateLimit": True})
-        ohlcv = exchange.fetch_ohlcv(underlying + "/USDT", "1d", limit=90)
+        ohlcv = exchange.fetch_ohlcv(underlying + "/USDC", "1d", limit=90)
         if not ohlcv or len(ohlcv) < 15:
             return 0.60, 50.0
         closes = [c[4] for c in ohlcv]

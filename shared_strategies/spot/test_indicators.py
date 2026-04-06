@@ -1,4 +1,4 @@
-"""Tests for spot/indicators.py — sma, ema, sma_crossover, rsi, bollinger_bands."""
+"""Tests for spot/indicators.py — sma, ema, sma_crossover, rsi, bollinger_bands, calculate_adx."""
 
 import importlib.util
 import numpy as np
@@ -23,6 +23,7 @@ ema = _imod.ema
 sma_crossover = _imod.sma_crossover
 rsi = _imod.rsi
 bollinger_bands = _imod.bollinger_bands
+calculate_adx = _imod.calculate_adx
 
 from conftest import make_ohlcv
 
@@ -212,3 +213,66 @@ class TestBollingerBands:
         result = bollinger_bands(df, period=20, num_std=2.0)
         # Not enough data for 20-period rolling — signal should be 0
         assert (result["signal"] == 0).all()
+
+
+# ─── ADX ────────────────────────────────────
+
+class TestADX:
+    def test_output_columns(self):
+        closes = list(np.linspace(90, 130, 60)) + list(np.linspace(130, 90, 60))
+        df = make_ohlcv(closes)
+        result = calculate_adx(df, period=14)
+        assert "adx" in result.columns
+        assert "plus_di" in result.columns
+        assert "minus_di" in result.columns
+
+    def test_adx_range(self):
+        """ADX values should be in [0, 100] range."""
+        closes = list(np.linspace(90, 130, 60)) + list(np.linspace(130, 90, 60))
+        df = make_ohlcv(closes)
+        result = calculate_adx(df, period=14)
+        valid_adx = result["adx"].dropna()
+        assert len(valid_adx) > 0
+        assert (valid_adx >= 0).all()
+        assert (valid_adx <= 100).all()
+
+    def test_trending_market_high_adx(self):
+        """Strong trend should produce higher ADX than sideways market."""
+        np.random.seed(42)
+        # Strong uptrend with consistent direction
+        trend_closes = list(np.linspace(100, 200, 100))
+        trend_df = make_ohlcv(trend_closes, noise=0.3)
+        trend_result = calculate_adx(trend_df, period=14)
+        trend_adx = trend_result["adx"].dropna().iloc[-1]
+
+        # Sideways oscillation (no net direction)
+        chop_closes = [100 + 5 * np.sin(i * 0.5) for i in range(100)]
+        chop_df = make_ohlcv(chop_closes, noise=0.3)
+        chop_result = calculate_adx(chop_df, period=14)
+        chop_adx = chop_result["adx"].dropna().iloc[-1]
+
+        # Trending ADX should be meaningfully higher
+        assert trend_adx > chop_adx, f"trend={trend_adx:.1f}, chop={chop_adx:.1f}"
+
+    def test_flat_data(self):
+        df = make_ohlcv([100.0] * 50, noise=0)
+        result = calculate_adx(df, period=14)
+        # With zero movement, ADX should be NaN (0/0 division)
+        # or very low — just ensure no crash
+        assert "adx" in result.columns
+
+    def test_insufficient_data(self):
+        df = make_ohlcv([100.0] * 5)
+        result = calculate_adx(df, period=14)
+        # Not enough data — ADX should be all NaN
+        assert result["adx"].isna().all()
+
+    def test_plus_di_minus_di_nonnegative(self):
+        """Directional indicators should be non-negative."""
+        closes = list(np.linspace(90, 130, 60)) + list(np.linspace(130, 90, 60))
+        df = make_ohlcv(closes)
+        result = calculate_adx(df, period=14)
+        valid_plus = result["plus_di"].dropna()
+        valid_minus = result["minus_di"].dropna()
+        assert (valid_plus >= 0).all()
+        assert (valid_minus >= 0).all()

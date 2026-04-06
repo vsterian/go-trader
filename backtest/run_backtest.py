@@ -24,13 +24,13 @@ from reporter import (
 )
 
 
-DEFAULT_SYMBOLS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT"]
+DEFAULT_SYMBOLS = ["BTC/USDC", "ETH/USDC", "SOL/USDC", "BNB/USDC"]
 DEFAULT_TIMEFRAMES = ["4h", "1d"]
 
 
 def run_single_backtest(
     strategy_name: str = "sma_crossover",
-    symbol: str = "BTC/USDT",
+    symbol: str = "BTC/USDC",
     timeframe: str = "1d",
     since: str = "2022-01-01",
     capital: float = 1000.0,
@@ -74,7 +74,7 @@ def run_single_backtest(
 
 
 def run_all_strategies(
-    symbol: str = "BTC/USDT",
+    symbol: str = "BTC/USDC",
     timeframe: str = "1d",
     since: str = "2022-01-01",
     capital: float = 1000.0,
@@ -133,7 +133,7 @@ def run_multi_asset(
 
 def run_walk_forward(
     strategy_name: str,
-    symbol: str = "BTC/USDT",
+    symbol: str = "BTC/USDC",
     timeframe: str = "1d",
     since: str = "2020-01-01",
     n_splits: int = 5,
@@ -167,7 +167,7 @@ def main():
     parser = argparse.ArgumentParser(description="Crypto Trading Bot — Backtester")
     parser.add_argument("--strategy", "-s", default="all",
                         help=f"Strategy name or 'all'. Available: {list_strategies()}")
-    parser.add_argument("--symbol", default="BTC/USDT",
+    parser.add_argument("--symbol", default="BTC/USDC",
                         help="Trading pair")
     parser.add_argument("--symbols", nargs="+", default=None,
                         help="Multiple trading pairs for multi-asset mode")

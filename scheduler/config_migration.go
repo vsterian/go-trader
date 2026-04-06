@@ -10,7 +10,7 @@ import (
 
 // CurrentConfigVersion is the version embedded in newly generated configs.
 // When the binary starts and cfg.ConfigVersion < CurrentConfigVersion, migration runs.
-const CurrentConfigVersion = 4
+const CurrentConfigVersion = 5
 
 // ConfigField describes a config field introduced in a specific version.
 type ConfigField struct {
@@ -65,6 +65,13 @@ var configFieldRegistry = []ConfigField{
 		Default:     "false",
 		FieldType:   "bool",
 	},
+	{
+		Version:     5,
+		JSONPath:    "adaptation_check_cycles",
+		Description: "Number of cycles between ML adaptation checks (0 = disabled). Default 60 (~1 check per day with 1h interval).",
+		Default:     "60",
+		FieldType:   "int",
+	},
 }
 
 // NewFieldsSince returns all ConfigFields added after the given version number.
@@ -91,8 +98,14 @@ func MigrateConfig(configPath string, fieldValues map[string]string) error {
 		return fmt.Errorf("parse config: %w", err)
 	}
 
+	// Build field type lookup from registry for typed value coercion.
+	fieldTypes := make(map[string]string)
+	for _, f := range configFieldRegistry {
+		fieldTypes[f.JSONPath] = f.FieldType
+	}
+
 	for path, value := range fieldValues {
-		setNestedField(raw, path, value)
+		setNestedField(raw, path, coerceValue(value, fieldTypes[path]))
 	}
 	raw["config_version"] = CurrentConfigVersion
 
@@ -109,7 +122,7 @@ func MigrateConfig(configPath string, fieldValues map[string]string) error {
 }
 
 // setNestedField sets a value at a dot-path in a nested map[string]interface{}.
-func setNestedField(obj map[string]interface{}, path string, value string) {
+func setNestedField(obj map[string]interface{}, path string, value interface{}) {
 	parts := strings.SplitN(path, ".", 2)
 	if len(parts) == 1 {
 		obj[parts[0]] = value
@@ -121,6 +134,25 @@ func setNestedField(obj map[string]interface{}, path string, value string) {
 		obj[parts[0]] = nested
 	}
 	setNestedField(nested, parts[1], value)
+}
+
+// coerceValue converts a string value to the appropriate Go type for JSON serialization.
+func coerceValue(value string, fieldType string) interface{} {
+	switch fieldType {
+	case "int":
+		var i int
+		if _, err := fmt.Sscanf(value, "%d", &i); err == nil {
+			return i
+		}
+	case "float":
+		var f float64
+		if _, err := fmt.Sscanf(value, "%f", &f); err == nil {
+			return f
+		}
+	case "bool":
+		return strings.EqualFold(value, "true")
+	}
+	return value // default: keep as string
 }
 
 // runConfigMigrationDM prompts the owner via DM for any new config fields introduced

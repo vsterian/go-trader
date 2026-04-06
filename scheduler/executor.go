@@ -15,6 +15,18 @@ var pythonSemaphore = make(chan struct{}, 4)
 
 const scriptTimeout = 30 * time.Second
 
+// MLBlock is the optional ML enhancement data from check_strategy.py output.
+type MLBlock struct {
+	Enabled           bool    `json:"enabled"`
+	BuyProbability    float64 `json:"buy_probability"`
+	SellProbability   float64 `json:"sell_probability"`
+	RuleSignal        int     `json:"rule_signal"`
+	DynamicBuyThresh  float64 `json:"dynamic_buy_threshold"`
+	DynamicSellThresh float64 `json:"dynamic_sell_threshold"`
+	ModelTrained      bool    `json:"model_trained"`
+	TrainingSamples   int     `json:"training_samples"`
+}
+
 // SpotResult is the JSON output from check_strategy.py.
 type SpotResult struct {
 	Strategy   string                 `json:"strategy"`
@@ -25,6 +37,7 @@ type SpotResult struct {
 	Indicators map[string]interface{} `json:"indicators"`
 	Timestamp  string                 `json:"timestamp"`
 	Error      string                 `json:"error,omitempty"`
+	ML         *MLBlock               `json:"ml,omitempty"`
 }
 
 // HyperliquidResult is the JSON output from check_hyperliquid.py (signal check mode).
@@ -475,6 +488,137 @@ func RunOKXExecute(script, symbol, side string, size float64, instType string) (
 	var result OKXExecuteResult
 	if err := json.Unmarshal(stdout, &result); err != nil {
 		return nil, stderrStr, fmt.Errorf("parse execute output: %w (stdout: %s)", err, string(stdout))
+	}
+	return &result, stderrStr, nil
+}
+
+// BinanceUSFill holds fill details from a live BinanceUS order.
+type BinanceUSFill struct {
+	AvgPx   float64 `json:"avg_px"`
+	TotalSz float64 `json:"total_sz"`
+}
+
+// BinanceUSExecution is the execution block from check_strategy.py --execute output.
+type BinanceUSExecution struct {
+	Action string          `json:"action"`
+	Symbol string          `json:"symbol"`
+	Size   float64         `json:"size"`
+	Fill   *BinanceUSFill  `json:"fill,omitempty"`
+}
+
+// BinanceUSExecuteResult is the top-level JSON from check_strategy.py --execute.
+type BinanceUSExecuteResult struct {
+	Execution *BinanceUSExecution `json:"execution"`
+	Platform  string              `json:"platform"`
+	Timestamp string              `json:"timestamp"`
+	Error     string              `json:"error,omitempty"`
+}
+
+// RunBinanceUSExecute runs check_strategy.py in execute mode for live Binance orders.
+// Size is determined by the Python script based on real exchange balance.
+func RunBinanceUSExecute(script, symbol, side string) (*BinanceUSExecuteResult, string, error) {
+	args := []string{
+		"--execute",
+		fmt.Sprintf("--symbol=%s", symbol),
+		fmt.Sprintf("--side=%s", side),
+		"--mode=live",
+	}
+	stdout, stderr, err := RunPythonScript(script, args)
+	stderrStr := string(stderr)
+	if err != nil {
+		var result BinanceUSExecuteResult
+		if jsonErr := json.Unmarshal(stdout, &result); jsonErr == nil && result.Error != "" {
+			return &result, stderrStr, nil
+		}
+		return nil, stderrStr, fmt.Errorf("binanceus execute error: %w (stderr: %s)", err, stderrStr)
+	}
+
+	var result BinanceUSExecuteResult
+	if err := json.Unmarshal(stdout, &result); err != nil {
+		return nil, stderrStr, fmt.Errorf("parse binanceus execute output: %w (stdout: %s)", err, string(stdout))
+	}
+	return &result, stderrStr, nil
+}
+
+// AlpacaResult holds the signal check output from check_alpaca.py.
+type AlpacaResult struct {
+	Strategy   string                 `json:"strategy"`
+	Symbol     string                 `json:"symbol"`
+	Timeframe  string                 `json:"timeframe"`
+	Signal     int                    `json:"signal"`
+	Price      float64                `json:"price"`
+	Indicators map[string]interface{} `json:"indicators"`
+	Mode       string                 `json:"mode"`
+	Platform   string                 `json:"platform"`
+	Timestamp  string                 `json:"timestamp"`
+	Error      string                 `json:"error,omitempty"`
+}
+
+// RunAlpacaCheck runs check_alpaca.py in signal check mode and parses the result.
+func RunAlpacaCheck(script string, args []string) (*AlpacaResult, string, error) {
+	stdout, stderr, err := RunPythonScript(script, args)
+	stderrStr := string(stderr)
+	if err != nil {
+		var result AlpacaResult
+		if jsonErr := json.Unmarshal(stdout, &result); jsonErr == nil && result.Error != "" {
+			return &result, stderrStr, nil
+		}
+		return nil, stderrStr, fmt.Errorf("script error: %w (stderr: %s)", err, stderrStr)
+	}
+
+	var result AlpacaResult
+	if err := json.Unmarshal(stdout, &result); err != nil {
+		return nil, stderrStr, fmt.Errorf("parse output: %w (stdout: %s)", err, string(stdout))
+	}
+	return &result, stderrStr, nil
+}
+
+// AlpacaFill holds fill details from a live Alpaca order.
+type AlpacaFill struct {
+	AvgPx   float64 `json:"avg_px"`
+	TotalSz float64 `json:"total_sz"`
+}
+
+// AlpacaExecution is the execution block from check_alpaca.py --execute output.
+type AlpacaExecution struct {
+	Action    string      `json:"action"`
+	Symbol    string      `json:"symbol"`
+	AmountUSD float64     `json:"amount_usd,omitempty"`
+	Quantity  float64     `json:"quantity,omitempty"`
+	Fill      *AlpacaFill `json:"fill,omitempty"`
+}
+
+// AlpacaExecuteResult is the top-level JSON from check_alpaca.py --execute.
+type AlpacaExecuteResult struct {
+	Execution *AlpacaExecution `json:"execution"`
+	Platform  string           `json:"platform"`
+	Timestamp string           `json:"timestamp"`
+	Error     string           `json:"error,omitempty"`
+}
+
+// RunAlpacaExecute runs check_alpaca.py in execute mode for live Alpaca stock orders.
+func RunAlpacaExecute(script, symbol, side string, amountUSD, quantity float64) (*AlpacaExecuteResult, string, error) {
+	args := []string{
+		"--execute",
+		fmt.Sprintf("--symbol=%s", symbol),
+		fmt.Sprintf("--side=%s", side),
+		fmt.Sprintf("--amount_usd=%g", amountUSD),
+		fmt.Sprintf("--quantity=%g", quantity),
+		"--mode=live",
+	}
+	stdout, stderr, err := RunPythonScript(script, args)
+	stderrStr := string(stderr)
+	if err != nil {
+		var result AlpacaExecuteResult
+		if jsonErr := json.Unmarshal(stdout, &result); jsonErr == nil && result.Error != "" {
+			return &result, stderrStr, nil
+		}
+		return nil, stderrStr, fmt.Errorf("alpaca execute error: %w (stderr: %s)", err, stderrStr)
+	}
+
+	var result AlpacaExecuteResult
+	if err := json.Unmarshal(stdout, &result); err != nil {
+		return nil, stderrStr, fmt.Errorf("parse alpaca execute output: %w (stdout: %s)", err, string(stdout))
 	}
 	return &result, stderrStr, nil
 }

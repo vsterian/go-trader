@@ -579,7 +579,7 @@ Ask the following questions (can be asked all at once or one at a time):
 > - Maker fee %: (e.g. `0.05`)
 > - Per-contract fee (options only, in USD, or `none`):
 
-> **Assets to trade** (e.g. `BTC, ETH` or `BTC/USDT, SOL/USDT`):
+> **Assets to trade** (e.g. `BTC, ETH` or `BTC/USDC, SOL/USDC`):
 
 > **Strategies to run** — which strategy types should this platform use?
 > - Spot: sma_crossover, ema_crossover, momentum, rsi, bollinger_bands, macd, mean_reversion, volume_weighted, triple_ema, rsi_macd_combo, pairs_spread
@@ -657,7 +657,7 @@ Channels are resolved dynamically via `resolveChannel(channels, platform, stratT
 Add example strategy entries for the new platform:
 ```json
 {"id": "<name>-momentum-btc", "type": "spot", "script": "shared_scripts/check_strategy.py",
- "args": ["momentum", "BTC/USDT", "1h"], "capital": 1000, "max_drawdown_pct": 60, "interval_seconds": 300}
+ "args": ["momentum", "BTC/USDC", "1h"], "capital": 1000, "max_drawdown_pct": 60, "interval_seconds": 300}
 ```
 Adjust `type`, `script`, and `args` for perps or options as appropriate.
 
@@ -758,11 +758,11 @@ Run historical simulations using scripts in `backtest/`. All require `.venv/bin/
 ```bash
 # Single strategy run
 .venv/bin/python3 backtest/run_backtest.py \
-  --strategy <name> --symbol BTC/USDT --timeframe 1h --mode single
+  --strategy <name> --symbol BTC/USDC --timeframe 1h --mode single
 
 # Compare two strategies
 .venv/bin/python3 backtest/run_backtest.py \
-  --strategy <name> --symbol BTC/USDT --timeframe 1h --mode compare
+  --strategy <name> --symbol BTC/USDC --timeframe 1h --mode compare
 
 # Multi-symbol sweep
 .venv/bin/python3 backtest/run_backtest.py \
@@ -770,11 +770,11 @@ Run historical simulations using scripts in `backtest/`. All require `.venv/bin/
 
 # Parameter optimization
 .venv/bin/python3 backtest/run_backtest.py \
-  --strategy <name> --symbol BTC/USDT --timeframe 1h --mode optimize
+  --strategy <name> --symbol BTC/USDC --timeframe 1h --mode optimize
 
 # Limit history (e.g. last 90 days)
 .venv/bin/python3 backtest/run_backtest.py \
-  --strategy <name> --symbol BTC/USDT --timeframe 1h --since 90
+  --strategy <name> --symbol BTC/USDC --timeframe 1h --since 90
 ```
 
 Key flags: `--strategy`, `--symbol`, `--timeframe`, `--mode` (single/compare/multi/optimize), `--since` (days)
@@ -854,6 +854,28 @@ Add or remove the `theta_harvest` block from individual strategy entries in conf
 
 Edit `auto_update` in `scheduler/config.json` (`"off"`, `"daily"`, or `"heartbeat"`), then restart:
 ```bash
+sudo systemctl restart go-trader
+```
+
+### Enable/Disable ML Signal Enhancement
+Add or remove the `ml_config` block from individual spot/perps strategy entries in config.json, then restart:
+```json
+{
+  "id": "sma-btc",
+  "type": "spot",
+  "ml_config": {
+    "enabled": true,
+    "buy_threshold_base": 0.30,
+    "sell_threshold_base": 0.70,
+    "strong_signal_multiplier": 1.5,
+    "adaptation_enabled": true,
+    "adaptation_interval_hours": 24
+  }
+}
+```
+Or enable for all strategies at once via init wizard:
+```bash
+./go-trader init --json '{"assets":["BTC"],"enableSpot":true,"spotStrategies":["sma_crossover"],"spotCapital":1000,"spotDrawdown":10,"mlEnabled":true}' --output scheduler/config.json
 sudo systemctl restart go-trader
 ```
 
@@ -970,6 +992,7 @@ When the user says `/menu`, "show menu", "what can I configure", "what's availab
      max_drawdown_pct  — strategy-level circuit breaker
      interval_seconds  — per-strategy check frequency (0 = use global)
      theta_harvest.*   — profit_target_pct, stop_loss_pct, min_dte_close
+     ml_config.*       — enabled, buy_threshold_base, sell_threshold_base, adaptation_enabled
    Discord:
      enabled           — true/false
      channels          — map: "spot", "options", "hyperliquid", "topstep", "robinhood", "okx"
@@ -996,7 +1019,7 @@ When the user says `/menu`, "show menu", "what can I configure", "what's availab
 5. BACKTESTING
    Spot:
      .venv/bin/python3 backtest/run_backtest.py \
-       --strategy <n> --symbol BTC/USDT --timeframe 1h \
+       --strategy <n> --symbol BTC/USDC --timeframe 1h \
        --mode single|compare|multi|optimize
    Options:
      .venv/bin/python3 backtest/backtest_options.py --underlying BTC --since YYYY-MM-DD --capital 10000
@@ -1034,6 +1057,45 @@ Config changes are synced to state on startup — no need to reset positions.
 
 When enabled, warnings are sent to all active Discord channels and DM'd to the owner. The correlation snapshot is also available via `/status`.
 
+### ML Signal Enhancement
+
+ML enhancement is an **opt-in, per-strategy** feature that layers a RandomForest model on top of existing rule-based strategies. It does not replace the rule engine — it filters or amplifies signals using market features.
+
+**How it works:**
+1. Rule-based signal is computed as normal (buy/sell/hold)
+2. ML predicts buy and sell probability using 14 market features (Bollinger Bands, RSI, ADX, volatility, confluences)
+3. Dynamic thresholds adjust based on market conditions, win rate, and current position P&L
+4. **BUY**: blocked if ML buy probability < dynamic threshold
+5. **SELL**: blocked if ML sell probability < dynamic threshold
+6. **No rule signal**: strong ML conviction (probability > threshold × multiplier) can override to generate a signal
+7. **Pre-buy**: position correlation check blocks if any existing position has return correlation ≥ 0.70
+
+**Self-learning:** The model trains incrementally on completed trades. After each sell trade, the outcome is recorded and the model retrains. After enough degradation (>15% win rate drop) or 24 hours, the adaptation system notifies via Discord.
+
+**Model persistence:** Pickle files stored in `models/` (not committed to git).
+
+| Setting | Key | Default | Description |
+|---------|-----|---------|-------------|
+| Enable | `ml_config.enabled` | false | Must be set to `true` to activate |
+| Buy threshold | `ml_config.buy_threshold_base` | 0.30 | Probability threshold to confirm buy |
+| Sell threshold | `ml_config.sell_threshold_base` | 0.70 | Probability threshold to confirm sell |
+| Strong multiplier | `ml_config.strong_signal_multiplier` | 1.5 | Multiplier for ML to override HOLD with a new signal |
+| Adaptation | `ml_config.adaptation_enabled` | false | Enable re-optimization alerts |
+| Adaptation interval | `ml_config.adaptation_interval_hours` | 24 | Hours between adaptation checks |
+
+**Global adaptation cycle interval** (how often the scheduler checks all ML-enabled strategies):
+
+| Setting | Key | Default | Description |
+|---------|-----|---------|-------------|
+| Adaptation check cycles | `adaptation_check_cycles` | 60 | Number of scheduler cycles between adaptation checks (0 = disabled) |
+
+**Enable via init wizard:**
+```bash
+./go-trader init --json '{"assets":["BTC"],"enableSpot":true,"spotStrategies":["sma_crossover"],"spotCapital":1000,"spotDrawdown":10,"mlEnabled":true,"mlAdaptation":true}' --output scheduler/config.json
+```
+
+**Does not apply to:** options strategies, `delta_neutral_funding` (direction-agnostic funding harvest).
+
 ### Per-Strategy Settings
 
 Each entry in the `strategies` array supports:
@@ -1047,6 +1109,12 @@ Each entry in the `strategies` array supports:
 | Theta profit target | `theta_harvest.profit_target_pct` | 60 | Close sold option when this % of premium is captured |
 | Theta stop loss | `theta_harvest.stop_loss_pct` | 200 | Close sold option if loss exceeds this % of premium (200 = 2× premium) |
 | Theta min DTE | `theta_harvest.min_dte_close` | 3 | Force-close positions with fewer than N days to expiry |
+| ML enabled | `ml_config.enabled` | false | Enable ML signal enhancement for this strategy (spot/perps only) |
+| ML buy threshold | `ml_config.buy_threshold_base` | 0.30 | Base probability required for ML to confirm a BUY signal |
+| ML sell threshold | `ml_config.sell_threshold_base` | 0.70 | Base probability required for ML to confirm a SELL signal |
+| ML strong multiplier | `ml_config.strong_signal_multiplier` | 1.5 | Multiplier applied to threshold for ML to override a rule HOLD with a signal |
+| ML adaptation | `ml_config.adaptation_enabled` | false | Enable automatic re-optimization when win rate degrades or 24h elapsed |
+| ML adaptation interval | `ml_config.adaptation_interval_hours` | 24 | Hours between automatic re-optimization checks |
 
 ### Discord Settings
 
@@ -1109,20 +1177,20 @@ Then restart: `sudo systemctl restart go-trader`
 Each spot strategy needs entries for each asset it supports:
 
 ```json
-{"id": "momentum-btc", "type": "spot", "script": "shared_scripts/check_strategy.py", "args": ["momentum", "BTC/USDT", "1h"], "capital": 1000, "max_drawdown_pct": 60, "interval_seconds": 300}
-{"id": "momentum-eth", "type": "spot", "script": "shared_scripts/check_strategy.py", "args": ["momentum", "ETH/USDT", "1h"], "capital": 1000, "max_drawdown_pct": 60, "interval_seconds": 300}
-{"id": "momentum-sol", "type": "spot", "script": "shared_scripts/check_strategy.py", "args": ["momentum", "SOL/USDT", "1h"], "capital": 1000, "max_drawdown_pct": 60, "interval_seconds": 300}
+{"id": "momentum-btc", "type": "spot", "script": "shared_scripts/check_strategy.py", "args": ["momentum", "BTC/USDC", "1h"], "capital": 1000, "max_drawdown_pct": 60, "interval_seconds": 300}
+{"id": "momentum-eth", "type": "spot", "script": "shared_scripts/check_strategy.py", "args": ["momentum", "ETH/USDC", "1h"], "capital": 1000, "max_drawdown_pct": 60, "interval_seconds": 300}
+{"id": "momentum-sol", "type": "spot", "script": "shared_scripts/check_strategy.py", "args": ["momentum", "SOL/USDC", "1h"], "capital": 1000, "max_drawdown_pct": 60, "interval_seconds": 300}
 ```
 
 **Strategies and their assets:**
 - `sma_crossover`, `ema_crossover`, `momentum`, `rsi`, `bollinger_bands`, `macd`, `mean_reversion`, `volume_weighted`, `triple_ema`, `rsi_macd_combo`: BTC, ETH, SOL
-- `pairs_spread`: Requires two assets — `args: ["pairs_spread", "BTC/USDT", "1d", "ETH/USDT"]`
+- `pairs_spread`: Requires two assets — `args: ["pairs_spread", "BTC/USDC", "1d", "ETH/USDC"]`
 
 **Pairs strategy IDs and args:**
 ```json
-{"id": "pairs-btc-eth", "args": ["pairs_spread", "BTC/USDT", "1d", "ETH/USDT"], "interval_seconds": 86400}
-{"id": "pairs-btc-sol", "args": ["pairs_spread", "BTC/USDT", "1d", "SOL/USDT"], "interval_seconds": 86400}
-{"id": "pairs-eth-sol", "args": ["pairs_spread", "ETH/USDT", "1d", "SOL/USDT"], "interval_seconds": 86400}
+{"id": "pairs-btc-eth", "args": ["pairs_spread", "BTC/USDC", "1d", "ETH/USDC"], "interval_seconds": 86400}
+{"id": "pairs-btc-sol", "args": ["pairs_spread", "BTC/USDC", "1d", "SOL/USDC"], "interval_seconds": 86400}
+{"id": "pairs-eth-sol", "args": ["pairs_spread", "ETH/USDC", "1d", "SOL/USDC"], "interval_seconds": 86400}
 ```
 
 ### Deribit Options Entries
@@ -1206,7 +1274,7 @@ Each OKX spot strategy runs the shared spot strategy suite on crypto assets:
 
 ### OKX Perps Entries
 
-Each OKX perps strategy runs on USDT-margined perpetual swaps:
+Each OKX perps strategy runs on USDC-margined perpetual swaps:
 
 ```json
 {"id": "okx-sma-btc-perp", "type": "perps", "platform": "okx", "script": "shared_scripts/check_okx.py", "args": ["sma_crossover", "BTC", "1h", "--mode=paper", "--inst-type=swap"], "capital": 1000, "max_drawdown_pct": 5, "interval_seconds": 3600}

@@ -11,7 +11,7 @@ import (
 func TestSpotResultJSON(t *testing.T) {
 	raw := `{
 		"strategy": "sma_crossover",
-		"symbol": "BTC/USDT",
+		"symbol": "BTC/USDC",
 		"timeframe": "1h",
 		"signal": 1,
 		"price": 60000.5,
@@ -255,5 +255,172 @@ func TestContractSpecJSON(t *testing.T) {
 	}
 	if spec.Margin != 6600 {
 		t.Errorf("Margin = %g, want 6600", spec.Margin)
+	}
+}
+
+func TestBinanceUSExecuteResultJSON(t *testing.T) {
+	raw := `{
+		"execution": {
+			"action": "buy",
+			"symbol": "BTC",
+			"size": 0.001,
+			"fill": {"avg_px": 67050, "total_sz": 0.001}
+		},
+		"platform": "binanceus",
+		"timestamp": "2025-01-01T00:00:00Z"
+	}`
+
+	var result BinanceUSExecuteResult
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Execution == nil {
+		t.Fatal("Execution is nil")
+	}
+	if result.Execution.Action != "buy" {
+		t.Errorf("Action = %q, want buy", result.Execution.Action)
+	}
+	if result.Execution.Size != 0.001 {
+		t.Errorf("Size = %g, want 0.001", result.Execution.Size)
+	}
+	if result.Execution.Fill == nil {
+		t.Fatal("Fill is nil")
+	}
+	if result.Execution.Fill.AvgPx != 67050 {
+		t.Errorf("AvgPx = %g, want 67050", result.Execution.Fill.AvgPx)
+	}
+	if result.Execution.Fill.TotalSz != 0.001 {
+		t.Errorf("TotalSz = %g, want 0.001", result.Execution.Fill.TotalSz)
+	}
+	if result.Platform != "binanceus" {
+		t.Errorf("Platform = %q, want binanceus", result.Platform)
+	}
+}
+
+func TestBinanceUSExecuteResultErrorJSON(t *testing.T) {
+	raw := `{
+		"execution": null,
+		"platform": "binanceus",
+		"timestamp": "2025-01-01T00:00:00Z",
+		"error": "order value $5.00 below min notional $10.00"
+	}`
+
+	var result BinanceUSExecuteResult
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Execution != nil {
+		t.Error("Execution should be nil on error")
+	}
+	if result.Error != "order value $5.00 below min notional $10.00" {
+		t.Errorf("Error = %q, want min notional error", result.Error)
+	}
+}
+
+func TestBinanceUSExecuteResultSellJSON(t *testing.T) {
+	raw := `{
+		"execution": {
+			"action": "sell",
+			"symbol": "ETH",
+			"size": 0.5,
+			"fill": {"avg_px": 3400.5, "total_sz": 0.5}
+		},
+		"platform": "binanceus"
+	}`
+
+	var result BinanceUSExecuteResult
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Execution.Action != "sell" {
+		t.Errorf("Action = %q, want sell", result.Execution.Action)
+	}
+	if result.Execution.Fill.AvgPx != 3400.5 {
+		t.Errorf("AvgPx = %g, want 3400.5", result.Execution.Fill.AvgPx)
+	}
+}
+
+func TestAlpacaExecuteResultJSON(t *testing.T) {
+	raw := `{
+		"execution": {
+			"action": "buy",
+			"symbol": "AAPL",
+			"amount_usd": 1000,
+			"fill": {"avg_px": 195.50, "total_sz": 5.0}
+		},
+		"platform": "alpaca",
+		"timestamp": "2025-01-01T00:00:00Z"
+	}`
+
+	var result AlpacaExecuteResult
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Execution == nil {
+		t.Fatal("Execution is nil")
+	}
+	if result.Execution.Action != "buy" {
+		t.Errorf("Action = %q, want buy", result.Execution.Action)
+	}
+	if result.Execution.AmountUSD != 1000 {
+		t.Errorf("AmountUSD = %g, want 1000", result.Execution.AmountUSD)
+	}
+	if result.Execution.Fill == nil {
+		t.Fatal("Fill is nil")
+	}
+	if result.Execution.Fill.AvgPx != 195.50 {
+		t.Errorf("AvgPx = %g, want 195.50", result.Execution.Fill.AvgPx)
+	}
+	if result.Execution.Fill.TotalSz != 5.0 {
+		t.Errorf("TotalSz = %g, want 5.0", result.Execution.Fill.TotalSz)
+	}
+	if result.Platform != "alpaca" {
+		t.Errorf("Platform = %q, want alpaca", result.Platform)
+	}
+}
+
+func TestAlpacaExecuteResultErrorJSON(t *testing.T) {
+	raw := `{
+		"execution": null,
+		"platform": "alpaca",
+		"timestamp": "2025-01-01T00:00:00Z",
+		"error": "need at least 1 share ($195.50), insufficient funds"
+	}`
+
+	var result AlpacaExecuteResult
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Execution != nil {
+		t.Error("Execution should be nil on error")
+	}
+	if result.Error == "" {
+		t.Error("Error should not be empty")
+	}
+}
+
+func TestAlpacaExecuteResultSellJSON(t *testing.T) {
+	raw := `{
+		"execution": {
+			"action": "sell",
+			"symbol": "SPY",
+			"quantity": 10.0,
+			"fill": {"avg_px": 580.25, "total_sz": 10.0}
+		},
+		"platform": "alpaca"
+	}`
+
+	var result AlpacaExecuteResult
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Execution.Action != "sell" {
+		t.Errorf("Action = %q, want sell", result.Execution.Action)
+	}
+	if result.Execution.Quantity != 10.0 {
+		t.Errorf("Quantity = %g, want 10.0", result.Execution.Quantity)
+	}
+	if result.Execution.Fill.AvgPx != 580.25 {
+		t.Errorf("AvgPx = %g, want 580.25", result.Execution.Fill.AvgPx)
 	}
 }

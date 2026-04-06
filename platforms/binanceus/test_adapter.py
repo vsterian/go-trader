@@ -23,7 +23,7 @@ def mock_exchange():
     """Provide a mock ccxt exchange and patch it into the adapter module."""
     mock_ex = MagicMock()
     original = _mod._get_ccxt_exchange
-    _mod._get_ccxt_exchange = lambda: mock_ex
+    _mod._get_ccxt_exchange = lambda authenticated=False: mock_ex
     yield mock_ex
     _mod._get_ccxt_exchange = original
 

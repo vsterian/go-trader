@@ -39,7 +39,7 @@ def _sample_backtest_result():
     """Create a sample backtest result dict."""
     return {
         "strategy_name": "sma_crossover",
-        "symbol": "BTC/USDT",
+        "symbol": "BTC/USDC",
         "timeframe": "1h",
         "start_date": "2023-01-01",
         "end_date": "2023-12-31",
@@ -114,8 +114,8 @@ class TestGetConnection:
 class TestOhlcvRoundTrip:
     def test_store_and_load(self, db_path):
         df = _sample_ohlcv_df()
-        store_ohlcv(df, "binanceus", "BTC/USDT", "1h", db_path=db_path)
-        loaded = load_ohlcv("binanceus", "BTC/USDT", "1h", db_path=db_path)
+        store_ohlcv(df, "binanceus", "BTC/USDC", "1h", db_path=db_path)
+        loaded = load_ohlcv("binanceus", "BTC/USDC", "1h", db_path=db_path)
 
         assert len(loaded) == 3
         assert list(loaded["timestamp"]) == [1700000000000, 1700003600000, 1700007200000]
@@ -124,17 +124,17 @@ class TestOhlcvRoundTrip:
 
     def test_datetime_index_set(self, db_path):
         df = _sample_ohlcv_df()
-        store_ohlcv(df, "binanceus", "BTC/USDT", "1h", db_path=db_path)
-        loaded = load_ohlcv("binanceus", "BTC/USDT", "1h", db_path=db_path)
+        store_ohlcv(df, "binanceus", "BTC/USDC", "1h", db_path=db_path)
+        loaded = load_ohlcv("binanceus", "BTC/USDC", "1h", db_path=db_path)
         assert loaded.index.name == "datetime"
 
     def test_load_empty_when_no_data(self, db_path):
-        loaded = load_ohlcv("binanceus", "ETH/USDT", "1d", db_path=db_path)
+        loaded = load_ohlcv("binanceus", "ETH/USDC", "1d", db_path=db_path)
         assert len(loaded) == 0
 
     def test_upsert_on_duplicate_timestamp(self, db_path):
         df = _sample_ohlcv_df()
-        store_ohlcv(df, "binanceus", "BTC/USDT", "1h", db_path=db_path)
+        store_ohlcv(df, "binanceus", "BTC/USDC", "1h", db_path=db_path)
 
         # Store again with updated close price for first candle
         df2 = pd.DataFrame({
@@ -145,52 +145,52 @@ class TestOhlcvRoundTrip:
             "close": [99999.0],  # changed
             "volume": [100.0],
         })
-        store_ohlcv(df2, "binanceus", "BTC/USDT", "1h", db_path=db_path)
+        store_ohlcv(df2, "binanceus", "BTC/USDC", "1h", db_path=db_path)
 
-        loaded = load_ohlcv("binanceus", "BTC/USDT", "1h", db_path=db_path)
+        loaded = load_ohlcv("binanceus", "BTC/USDC", "1h", db_path=db_path)
         assert len(loaded) == 3  # still 3 rows, not 4
         assert loaded["close"].iloc[0] == pytest.approx(99999.0)  # updated
 
     def test_filter_by_start_ts(self, db_path):
         df = _sample_ohlcv_df()
-        store_ohlcv(df, "binanceus", "BTC/USDT", "1h", db_path=db_path)
+        store_ohlcv(df, "binanceus", "BTC/USDC", "1h", db_path=db_path)
 
-        loaded = load_ohlcv("binanceus", "BTC/USDT", "1h",
+        loaded = load_ohlcv("binanceus", "BTC/USDC", "1h",
                             start_ts=1700003600000, db_path=db_path)
         assert len(loaded) == 2
 
     def test_filter_by_end_ts(self, db_path):
         df = _sample_ohlcv_df()
-        store_ohlcv(df, "binanceus", "BTC/USDT", "1h", db_path=db_path)
+        store_ohlcv(df, "binanceus", "BTC/USDC", "1h", db_path=db_path)
 
-        loaded = load_ohlcv("binanceus", "BTC/USDT", "1h",
+        loaded = load_ohlcv("binanceus", "BTC/USDC", "1h",
                             end_ts=1700003600000, db_path=db_path)
         assert len(loaded) == 2
 
     def test_filter_by_date_range(self, db_path):
         df = _sample_ohlcv_df()
-        store_ohlcv(df, "binanceus", "BTC/USDT", "1h", db_path=db_path)
+        store_ohlcv(df, "binanceus", "BTC/USDC", "1h", db_path=db_path)
 
-        loaded = load_ohlcv("binanceus", "BTC/USDT", "1h",
+        loaded = load_ohlcv("binanceus", "BTC/USDC", "1h",
                             start_ts=1700003600000, end_ts=1700003600000,
                             db_path=db_path)
         assert len(loaded) == 1
 
     def test_different_exchanges_isolated(self, db_path):
         df = _sample_ohlcv_df()
-        store_ohlcv(df, "binanceus", "BTC/USDT", "1h", db_path=db_path)
-        store_ohlcv(df, "coinbase", "BTC/USDT", "1h", db_path=db_path)
+        store_ohlcv(df, "binanceus", "BTC/USDC", "1h", db_path=db_path)
+        store_ohlcv(df, "coinbase", "BTC/USDC", "1h", db_path=db_path)
 
-        binance = load_ohlcv("binanceus", "BTC/USDT", "1h", db_path=db_path)
-        coinbase = load_ohlcv("coinbase", "BTC/USDT", "1h", db_path=db_path)
+        binance = load_ohlcv("binanceus", "BTC/USDC", "1h", db_path=db_path)
+        coinbase = load_ohlcv("coinbase", "BTC/USDC", "1h", db_path=db_path)
         assert len(binance) == 3
         assert len(coinbase) == 3
 
     def test_different_symbols_isolated(self, db_path):
         df = _sample_ohlcv_df()
-        store_ohlcv(df, "binanceus", "BTC/USDT", "1h", db_path=db_path)
+        store_ohlcv(df, "binanceus", "BTC/USDC", "1h", db_path=db_path)
 
-        loaded = load_ohlcv("binanceus", "ETH/USDT", "1h", db_path=db_path)
+        loaded = load_ohlcv("binanceus", "ETH/USDC", "1h", db_path=db_path)
         assert len(loaded) == 0
 
     def test_ordered_by_timestamp(self, db_path):
@@ -203,8 +203,8 @@ class TestOhlcvRoundTrip:
             "close": [1.0, 2.0, 3.0],
             "volume": [1.0, 2.0, 3.0],
         })
-        store_ohlcv(df, "binanceus", "BTC/USDT", "1h", db_path=db_path)
-        loaded = load_ohlcv("binanceus", "BTC/USDT", "1h", db_path=db_path)
+        store_ohlcv(df, "binanceus", "BTC/USDC", "1h", db_path=db_path)
+        loaded = load_ohlcv("binanceus", "BTC/USDC", "1h", db_path=db_path)
         timestamps = list(loaded["timestamp"])
         assert timestamps == sorted(timestamps)
 
@@ -219,7 +219,7 @@ class TestBacktestRoundTrip:
         df = get_backtest_results(db_path=db_path)
         assert len(df) == 1
         assert df["strategy_name"].iloc[0] == "sma_crossover"
-        assert df["symbol"].iloc[0] == "BTC/USDT"
+        assert df["symbol"].iloc[0] == "BTC/USDC"
         assert df["initial_capital"].iloc[0] == pytest.approx(10000.0)
         assert df["final_capital"].iloc[0] == pytest.approx(12500.0)
         assert df["total_return_pct"].iloc[0] == pytest.approx(25.0)
@@ -273,7 +273,7 @@ class TestBacktestRoundTrip:
         # Minimal result dict
         result = {
             "strategy_name": "test",
-            "symbol": "BTC/USDT",
+            "symbol": "BTC/USDC",
             "timeframe": "1d",
             "start_date": "2023-01-01",
             "end_date": "2023-12-31",

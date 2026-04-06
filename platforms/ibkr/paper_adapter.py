@@ -291,7 +291,7 @@ def get_spot_price_ibkr(underlying: str) -> float:
     try:
         import ccxt
         exchange = ccxt.binanceus({"enableRateLimit": True})
-        symbol = f"{underlying}/USDT"
+        symbol = f"{underlying}/USDC"
         ticker = exchange.fetch_ticker(symbol)
         return ticker["last"]
     except Exception as e:
@@ -304,7 +304,7 @@ def calc_vol_and_iv_rank(underlying: str) -> Tuple[float, float]:
     try:
         import ccxt
         exchange = ccxt.binanceus({"enableRateLimit": True})
-        symbol = f"{underlying}/USDT"
+        symbol = f"{underlying}/USDC"
         ohlcv = exchange.fetch_ohlcv(symbol, "1d", limit=90)
 
         if not ohlcv or len(ohlcv) < 30:

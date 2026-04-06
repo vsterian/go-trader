@@ -21,11 +21,11 @@ func TestPortfolioValueWithPositions(t *testing.T) {
 	s := &StrategyState{
 		Cash: 500,
 		Positions: map[string]*Position{
-			"BTC/USDT": {Symbol: "BTC/USDT", Quantity: 0.01, AvgCost: 50000, Side: "long"},
+			"BTC/USDC": {Symbol: "BTC/USDC", Quantity: 0.01, AvgCost: 50000, Side: "long"},
 		},
 		OptionPositions: make(map[string]*OptionPosition),
 	}
-	prices := map[string]float64{"BTC/USDT": 60000}
+	prices := map[string]float64{"BTC/USDC": 60000}
 
 	got := PortfolioValue(s, prices)
 	// Cash (500) + position value (0.01 * 60000 = 600) = 1100
@@ -38,7 +38,7 @@ func TestPortfolioValueFallbackPrice(t *testing.T) {
 	s := &StrategyState{
 		Cash: 500,
 		Positions: map[string]*Position{
-			"BTC/USDT": {Symbol: "BTC/USDT", Quantity: 0.01, AvgCost: 50000, Side: "long"},
+			"BTC/USDC": {Symbol: "BTC/USDC", Quantity: 0.01, AvgCost: 50000, Side: "long"},
 		},
 		OptionPositions: make(map[string]*OptionPosition),
 	}
@@ -70,11 +70,11 @@ func TestPortfolioValueShort(t *testing.T) {
 	s := &StrategyState{
 		Cash: 1000,
 		Positions: map[string]*Position{
-			"BTC/USDT": {Symbol: "BTC/USDT", Quantity: 0.01, AvgCost: 60000, Side: "short"},
+			"BTC/USDC": {Symbol: "BTC/USDC", Quantity: 0.01, AvgCost: 60000, Side: "short"},
 		},
 		OptionPositions: make(map[string]*OptionPosition),
 	}
-	prices := map[string]float64{"BTC/USDT": 55000}
+	prices := map[string]float64{"BTC/USDC": 55000}
 
 	got := PortfolioValue(s, prices)
 	// Cash (1000) + short profit: 0.01 * (2*60000 - 55000) = 0.01 * 65000 = 650
@@ -112,7 +112,7 @@ func TestExecuteSpotSignalHold(t *testing.T) {
 	logger, _ := lm.GetStrategyLogger("test")
 	defer logger.Close()
 
-	trades, err := ExecuteSpotSignal(s, 0, "BTC/USDT", 60000, logger)
+	trades, err := ExecuteSpotSignal(s, 0, "BTC/USDC", 60000, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,16 +138,16 @@ func TestExecuteSpotSignalBuy(t *testing.T) {
 	logger, _ := lm.GetStrategyLogger("test")
 	defer logger.Close()
 
-	trades, err := ExecuteSpotSignal(s, 1, "BTC/USDT", 50000, logger)
+	trades, err := ExecuteSpotSignal(s, 1, "BTC/USDC", 50000, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if trades != 1 {
 		t.Errorf("trades = %d, want 1", trades)
 	}
-	pos := s.Positions["BTC/USDT"]
+	pos := s.Positions["BTC/USDC"]
 	if pos == nil {
-		t.Fatal("should have BTC/USDT position")
+		t.Fatal("should have BTC/USDC position")
 	}
 	if pos.Side != "long" {
 		t.Errorf("side = %q, want %q", pos.Side, "long")
@@ -171,7 +171,7 @@ func TestExecuteSpotSignalSell(t *testing.T) {
 		Cash:     100,
 		Platform: "binanceus",
 		Positions: map[string]*Position{
-			"BTC/USDT": {Symbol: "BTC/USDT", Quantity: 0.01, AvgCost: 50000, Side: "long"},
+			"BTC/USDC": {Symbol: "BTC/USDC", Quantity: 0.01, AvgCost: 50000, Side: "long"},
 		},
 		OptionPositions: make(map[string]*OptionPosition),
 		TradeHistory:    []Trade{},
@@ -182,14 +182,14 @@ func TestExecuteSpotSignalSell(t *testing.T) {
 	logger, _ := lm.GetStrategyLogger("test")
 	defer logger.Close()
 
-	trades, err := ExecuteSpotSignal(s, -1, "BTC/USDT", 55000, logger)
+	trades, err := ExecuteSpotSignal(s, -1, "BTC/USDC", 55000, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if trades != 1 {
 		t.Errorf("trades = %d, want 1", trades)
 	}
-	if _, ok := s.Positions["BTC/USDT"]; ok {
+	if _, ok := s.Positions["BTC/USDC"]; ok {
 		t.Error("position should be closed after sell")
 	}
 
@@ -212,7 +212,7 @@ func TestExecuteSpotSignalBuyAlreadyLong(t *testing.T) {
 	s := &StrategyState{
 		Cash: 1000,
 		Positions: map[string]*Position{
-			"BTC/USDT": {Symbol: "BTC/USDT", Quantity: 0.01, AvgCost: 50000, Side: "long"},
+			"BTC/USDC": {Symbol: "BTC/USDC", Quantity: 0.01, AvgCost: 50000, Side: "long"},
 		},
 		OptionPositions: make(map[string]*OptionPosition),
 		TradeHistory:    []Trade{},
@@ -222,7 +222,7 @@ func TestExecuteSpotSignalBuyAlreadyLong(t *testing.T) {
 	logger, _ := lm.GetStrategyLogger("test")
 	defer logger.Close()
 
-	trades, _ := ExecuteSpotSignal(s, 1, "BTC/USDT", 60000, logger)
+	trades, _ := ExecuteSpotSignal(s, 1, "BTC/USDC", 60000, logger)
 	if trades != 0 {
 		t.Error("should not buy when already long")
 	}
@@ -240,7 +240,7 @@ func TestExecuteSpotSignalSellNoPosition(t *testing.T) {
 	logger, _ := lm.GetStrategyLogger("test")
 	defer logger.Close()
 
-	trades, _ := ExecuteSpotSignal(s, -1, "BTC/USDT", 60000, logger)
+	trades, _ := ExecuteSpotSignal(s, -1, "BTC/USDC", 60000, logger)
 	if trades != 0 {
 		t.Error("should not sell when no position")
 	}
@@ -258,7 +258,7 @@ func TestExecuteSpotSignalInsufficientCash(t *testing.T) {
 	logger, _ := lm.GetStrategyLogger("test")
 	defer logger.Close()
 
-	trades, _ := ExecuteSpotSignal(s, 1, "BTC/USDT", 60000, logger)
+	trades, _ := ExecuteSpotSignal(s, 1, "BTC/USDC", 60000, logger)
 	if trades != 0 {
 		t.Error("should not buy with insufficient cash")
 	}

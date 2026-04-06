@@ -23,7 +23,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 			"id": "test-spot",
 			"type": "spot",
 			"script": "shared_scripts/check_strategy.py",
-			"args": ["sma_crossover", "BTC/USDT", "1h"],
+			"args": ["sma_crossover", "BTC/USDC", "1h"],
 			"capital": 1000
 		}]
 	}`
@@ -60,6 +60,7 @@ func TestLoadConfigPlatformInference(t *testing.T) {
 		{"rh-btc-sma", "robinhood"},
 		{"okx-btc-sma", "okx"},
 		{"luno-btc-sma", "luno"},
+		{"alpaca-sma-aapl", "alpaca"},
 		{"spot-btc-sma", "binanceus"},
 	}
 
@@ -71,7 +72,7 @@ func TestLoadConfigPlatformInference(t *testing.T) {
 					"id": "` + tc.id + `",
 					"type": "spot",
 					"script": "shared_scripts/check_strategy.py",
-					"args": ["sma_crossover", "BTC/USDT", "1h"],
+					"args": ["sma_crossover", "BTC/USDC", "1h"],
 					"capital": 1000
 				}]
 			}`
@@ -107,7 +108,7 @@ func TestLoadConfigMaxDrawdownDefaults(t *testing.T) {
 					"id": "test-` + tc.stratType + `",
 					"type": "` + tc.stratType + `",
 					"script": "shared_scripts/check_strategy.py",
-					"args": ["sma_crossover", "BTC/USDT", "1h"],
+					"args": ["sma_crossover", "BTC/USDC", "1h"],
 					"capital": 1000
 				}]
 			}`
@@ -167,7 +168,7 @@ func TestLoadConfigPortfolioRiskDefaults(t *testing.T) {
 			"id": "test-spot",
 			"type": "spot",
 			"script": "shared_scripts/check_strategy.py",
-			"args": ["sma_crossover", "BTC/USDT", "1h"],
+			"args": ["sma_crossover", "BTC/USDC", "1h"],
 			"capital": 1000
 		}]
 	}`
@@ -196,7 +197,7 @@ func TestLoadConfigCorrelationDefaults(t *testing.T) {
 			"id": "test-spot",
 			"type": "spot",
 			"script": "shared_scripts/check_strategy.py",
-			"args": ["sma_crossover", "BTC/USDT", "1h"],
+			"args": ["sma_crossover", "BTC/USDC", "1h"],
 			"capital": 1000
 		}]
 	}`
@@ -229,7 +230,7 @@ func TestLoadConfigEnvVarOverrides(t *testing.T) {
 			"id": "test-spot",
 			"type": "spot",
 			"script": "shared_scripts/check_strategy.py",
-			"args": ["sma_crossover", "BTC/USDT", "1h"],
+			"args": ["sma_crossover", "BTC/USDC", "1h"],
 			"capital": 1000
 		}]
 	}`

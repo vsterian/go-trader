@@ -64,8 +64,8 @@ func TestExtractAsset(t *testing.T) {
 		sc   StrategyConfig
 		want string
 	}{
-		// spot: Args[1] is "BTC/USDT" → strip suffix → "BTC"
-		{StrategyConfig{Type: "spot", Args: []string{"sma_crossover", "BTC/USDT"}}, "BTC"},
+		// spot: Args[1] is "BTC/USDC" → strip suffix → "BTC"
+		{StrategyConfig{Type: "spot", Args: []string{"sma_crossover", "BTC/USDC"}}, "BTC"},
 		// options: Args[1] is the underlying symbol
 		{StrategyConfig{Type: "options", Args: []string{"wheel", "ETH", "--platform=deribit"}}, "ETH"},
 		// perps: Args[1] is coin name
@@ -127,7 +127,7 @@ func TestFormatCategorySummary_WithAsset(t *testing.T) {
 			"hl-rsi-btc": {Cash: 1000},
 		},
 	}
-	prices := map[string]float64{"BTC/USDT": 50000, "ETH/USDT": 3000}
+	prices := map[string]float64{"BTC/USDC": 50000, "ETH/USDC": 3000}
 
 	// With asset — title should contain " — BTC" and only BTC price shown
 	msg := FormatCategorySummary(1, 0, 1, 0, 1000, prices, nil, strats, state, "hyperliquid", "BTC")

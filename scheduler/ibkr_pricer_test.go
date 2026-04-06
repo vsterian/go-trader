@@ -139,7 +139,7 @@ func TestBsPricePutCallParity(t *testing.T) {
 
 func TestIBKRPricerFetchSpotPrice(t *testing.T) {
 	prices := map[string]float64{
-		"BTC/USDT": 60000,
+		"BTC/USDC": 60000,
 		"ETH/USD":  3000,
 	}
 	pricer := NewIBKRPricer(prices)
@@ -148,7 +148,7 @@ func TestIBKRPricerFetchSpotPrice(t *testing.T) {
 		t.Errorf("Name() = %q, want %q", pricer.Name(), "ibkr")
 	}
 
-	// Should find BTC via /USDT suffix
+	// Should find BTC via /USDC suffix
 	spot, err := pricer.FetchSpotPrice("BTC")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -175,7 +175,7 @@ func TestIBKRPricerFetchSpotPrice(t *testing.T) {
 
 func TestIBKRPricerGetOptionPriceFull(t *testing.T) {
 	prices := map[string]float64{
-		"BTC/USDT": 60000,
+		"BTC/USDC": 60000,
 	}
 	pricer := NewIBKRPricer(prices)
 
@@ -197,7 +197,7 @@ func TestIBKRPricerGetOptionPriceFull(t *testing.T) {
 
 func TestIBKRPricerGetOptionPriceExpired(t *testing.T) {
 	prices := map[string]float64{
-		"BTC/USDT": 60000,
+		"BTC/USDC": 60000,
 	}
 	pricer := NewIBKRPricer(prices)
 
@@ -218,7 +218,7 @@ func TestIBKRPricerGetOptionPriceExpired(t *testing.T) {
 }
 
 func TestIBKRPricerInvalidExpiry(t *testing.T) {
-	prices := map[string]float64{"BTC/USDT": 60000}
+	prices := map[string]float64{"BTC/USDC": 60000}
 	pricer := NewIBKRPricer(prices)
 
 	_, _, _, err := pricer.GetOptionPriceFull("BTC", "call", 60000, "not-a-date")

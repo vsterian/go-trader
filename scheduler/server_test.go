@@ -156,8 +156,8 @@ func TestHandleStatusWithBearerToken(t *testing.T) {
 
 func TestNewStatusServerExtractsSymbols(t *testing.T) {
 	strategies := []StrategyConfig{
-		{Type: "spot", Args: []string{"sma", "BTC/USDT", "1h"}},
-		{Type: "spot", Args: []string{"rsi", "ETH/USDT", "1h"}},
+		{Type: "spot", Args: []string{"sma", "BTC/USDC", "1h"}},
+		{Type: "spot", Args: []string{"rsi", "ETH/USDC", "1h"}},
 		{Type: "options", Args: []string{"vol", "BTC"}}, // not spot, skipped
 	}
 	state := NewAppState()
@@ -170,11 +170,11 @@ func TestNewStatusServerExtractsSymbols(t *testing.T) {
 	for _, s := range ss.priceSymbols {
 		symbolSet[s] = true
 	}
-	if !symbolSet["BTC/USDT"] {
-		t.Error("BTC/USDT should be in priceSymbols")
+	if !symbolSet["BTC/USDC"] {
+		t.Error("BTC/USDC should be in priceSymbols")
 	}
-	if !symbolSet["ETH/USDT"] {
-		t.Error("ETH/USDT should be in priceSymbols")
+	if !symbolSet["ETH/USDC"] {
+		t.Error("ETH/USDC should be in priceSymbols")
 	}
 	if len(ss.priceSymbols) != 2 {
 		t.Errorf("priceSymbols len = %d, want 2", len(ss.priceSymbols))

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -112,6 +113,8 @@ func main() {
 			fmt.Println("State saved successfully.")
 		}
 		mu.Unlock()
+		BackupStateFiles(cfg)
+		fmt.Println("State backup created.")
 		close(stopCh)
 	}()
 
@@ -448,6 +451,16 @@ func main() {
 							}
 						}
 					}
+					var alpacaCash float64
+					var alpacaPosQty float64
+					if sc.Platform == "alpaca" && alpacaIsLive(sc.Args) {
+						alpacaCash = stratState.Cash
+						if sym := alpacaSymbol(sc.Args); sym != "" {
+							if pos, ok := stratState.Positions[sym]; ok {
+								alpacaPosQty = pos.Quantity
+							}
+						}
+					}
 					var tsCash float64
 					var tsContracts float64
 					if sc.Type == "futures" && topstepIsLive(sc.Args) {
@@ -455,6 +468,17 @@ func main() {
 						if sym := topstepSymbol(sc.Args); sym != "" {
 							if pos, ok := stratState.Positions[sym]; ok {
 								tsContracts = pos.Quantity
+							}
+						}
+					}
+					// ML: compute current position profit % for dynamic sell threshold
+					var mlProfitPct float64
+					if sc.MLConfig != nil && sc.MLConfig.Enabled && sc.Type == "spot" {
+						for sym, pos := range stratState.Positions {
+							if pos.Quantity > 0 && pos.AvgCost > 0 {
+								if curPrice, ok := prices[sym]; ok && curPrice > 0 {
+									mlProfitPct = (curPrice/pos.AvgCost - 1) * 100
+								}
 							}
 						}
 					}
@@ -520,10 +544,79 @@ func main() {
 									mu.Unlock()
 								}
 							}
-						} else if result, signalStr, price, ok := runSpotCheck(sc, prices, logger); ok {
-							mu.Lock()
-							trades, detail = executeSpotResult(sc, stratState, result, signalStr, price, logger)
-							mu.Unlock()
+						} else if sc.Platform == "binanceus" && binanceusIsLive(sc.Args) {
+							// BinanceUS live trading
+							if sc.MLConfig != nil && sc.MLConfig.Enabled && mlProfitPct != 0 {
+								sc.Args = append(append([]string{}, sc.Args...), fmt.Sprintf("--profit-pct=%.4f", mlProfitPct))
+							}
+							if result, signalStr, price, ok := runSpotCheck(sc, prices, logger); ok {
+								if sc.MLConfig != nil && sc.MLConfig.Enabled && result.Signal == 1 {
+									if blocked, reason := checkMLCorrelation(sc, result.Symbol, stratState, logger); blocked {
+										logger.Info("[ml] correlation blocked BUY: %s", reason)
+										result.Signal = 0
+										signalStr = "HOLD"
+									}
+								}
+								prices[result.Symbol] = price
+								var execResult *BinanceUSExecuteResult
+								liveExecFailed := false
+								if result.Signal != 0 {
+									if er, ok2 := runBinanceUSExecuteOrder(sc, result, price, logger); ok2 {
+										execResult = er
+									} else {
+										liveExecFailed = true
+									}
+								}
+								if !liveExecFailed {
+									mu.Lock()
+									trades, detail = executeBinanceUSResult(sc, stratState, result, execResult, signalStr, price, logger)
+									mu.Unlock()
+								}
+								if sc.MLConfig != nil && sc.MLConfig.Enabled && result.Signal == -1 && trades > 0 {
+									go recordMLOutcome(sc, result.Symbol, mlProfitPct, logger)
+								}
+							}
+						} else if sc.Platform == "alpaca" {
+							// Alpaca US stock trading (paper + live)
+							if result, signalStr, price, ok := runAlpacaCheck(sc, prices, logger); ok {
+								prices[result.Symbol] = price
+								var execResult *AlpacaExecuteResult
+								liveExecFailed := false
+								if alpacaIsLive(sc.Args) && result.Signal != 0 {
+									if er, ok2 := runAlpacaExecuteOrder(sc, result, price, alpacaCash, alpacaPosQty, logger); ok2 {
+										execResult = er
+									} else {
+										liveExecFailed = true
+									}
+								}
+								if !liveExecFailed {
+									mu.Lock()
+									trades, detail = executeAlpacaResult(sc, stratState, result, execResult, signalStr, price, logger)
+									mu.Unlock()
+								}
+							}
+						} else {
+							// Append ML profit-pct for dynamic sell thresholds
+							if sc.MLConfig != nil && sc.MLConfig.Enabled && mlProfitPct != 0 {
+								sc.Args = append(append([]string{}, sc.Args...), fmt.Sprintf("--profit-pct=%.4f", mlProfitPct))
+							}
+							if result, signalStr, price, ok := runSpotCheck(sc, prices, logger); ok {
+								// ML: correlation check before buy
+								if sc.MLConfig != nil && sc.MLConfig.Enabled && result.Signal == 1 {
+									if blocked, reason := checkMLCorrelation(sc, result.Symbol, stratState, logger); blocked {
+										logger.Info("[ml] correlation blocked BUY: %s", reason)
+										result.Signal = 0
+										signalStr = "HOLD"
+									}
+								}
+								mu.Lock()
+								trades, detail = executeSpotResult(sc, stratState, result, signalStr, price, logger)
+								mu.Unlock()
+								// ML: record outcome after sell trade (fire-and-forget)
+								if sc.MLConfig != nil && sc.MLConfig.Enabled && result.Signal == -1 && trades > 0 {
+									go recordMLOutcome(sc, result.Symbol, mlProfitPct, logger)
+								}
+							}
 						}
 					case "options":
 						if result, signalStr, ok := runOptionsCheck(sc, posJSON, logger); ok {
@@ -722,6 +815,30 @@ func main() {
 		}
 		mu.Unlock()
 
+		// Periodic state backup (every 12 cycles ≈ hourly at 5-min intervals)
+		if cycle%12 == 0 {
+			BackupStateFiles(cfg)
+		}
+
+		// ML: periodic adaptation check
+		if cfg.AdaptationCheckCycles > 0 && cycle%cfg.AdaptationCheckCycles == 0 {
+			for _, sc := range cfg.Strategies {
+				if sc.MLConfig == nil || !sc.MLConfig.Enabled || !sc.MLConfig.AdaptationEnabled {
+					continue
+				}
+				// Extract symbol from args (first positional after strategy name)
+				if len(sc.Args) < 2 {
+					continue
+				}
+				symbol := sc.Args[1]
+				timeframe := "1h"
+				if len(sc.Args) >= 3 {
+					timeframe = sc.Args[2]
+				}
+				go checkMLAdaptation(sc, symbol, timeframe, notifier, &mu, state)
+			}
+		}
+
 		// Periodic update check (heartbeat: every cycle; daily: once per day).
 		if cfg.AutoUpdate == "heartbeat" {
 			checkForUpdates(cfg, notifier, &lastNotifiedHash, &mu, state)
@@ -840,6 +957,12 @@ func runSpotCheck(sc StrategyConfig, prices map[string]float64, logger *Strategy
 	if sc.HTFFilter {
 		args = append(append([]string{}, args...), "--htf-filter")
 	}
+	// Append ML flags when ML is enabled
+	if sc.MLConfig != nil && sc.MLConfig.Enabled {
+		args = append(append([]string{}, args...), "--ml-enabled")
+		args = append(args, fmt.Sprintf("--ml-buy-base=%.4f", sc.MLConfig.BuyThresholdBase))
+		args = append(args, fmt.Sprintf("--ml-sell-base=%.4f", sc.MLConfig.SellThresholdBase))
+	}
 	logger.Info("Running: python3 %s %v", sc.Script, args)
 
 	result, stderr, err := RunSpotCheck(sc.Script, args)
@@ -866,6 +989,13 @@ func runSpotCheck(sc StrategyConfig, prices map[string]float64, logger *Strategy
 		signalStr = "SELL"
 	}
 	logger.Info("Signal: %s | %s @ $%.2f", signalStr, result.Symbol, result.Price)
+
+	// Log ML predictions if present
+	if result.ML != nil && result.ML.Enabled {
+		logger.Info("[ml] buy_prob=%.3f sell_prob=%.3f trained=%v rule_signal=%d",
+			result.ML.BuyProbability, result.ML.SellProbability,
+			result.ML.ModelTrained, result.ML.RuleSignal)
+	}
 
 	// Use script price, fallback to fetched price
 	price := result.Price
@@ -896,6 +1026,100 @@ func executeSpotResult(sc StrategyConfig, s *StrategyState, result *SpotResult, 
 		detail = fmt.Sprintf("[%s] %s %s @ $%.2f", sc.ID, signalStr, result.Symbol, price)
 	}
 	return trades, detail
+}
+
+// checkMLAdaptation runs check_adaptation.py for a strategy and logs/notifies results.
+func checkMLAdaptation(sc StrategyConfig, symbol, timeframe string, notifier *MultiNotifier, mu *sync.RWMutex, state *AppState) {
+	args := []string{sc.ID, symbol, timeframe}
+	stdout, stderr, err := RunPythonScript("shared_scripts/check_adaptation.py", args)
+	if err != nil {
+		fmt.Printf("[ml] adaptation check failed for %s: %v\n", sc.ID, err)
+		if len(stderr) > 0 {
+			fmt.Printf("[ml] stderr: %s\n", string(stderr))
+		}
+		return
+	}
+	var result struct {
+		NeedsAdaptation bool              `json:"needs_adaptation"`
+		Reason          string            `json:"reason"`
+		Metrics         map[string]interface{} `json:"current_metrics"`
+		Suggestion      string            `json:"suggestion"`
+	}
+	if err := json.Unmarshal(stdout, &result); err != nil {
+		fmt.Printf("[ml] parse adaptation result for %s: %v\n", sc.ID, err)
+		return
+	}
+	if result.NeedsAdaptation {
+		msg := fmt.Sprintf("\xf0\x9f\x94\x84 **ML Adaptation Needed** — %s\nReason: %s\nSuggestion: %s", sc.ID, result.Reason, result.Suggestion)
+		notifier.SendToAllChannels(msg)
+		// Update ML state
+		mu.Lock()
+		if s, ok := state.Strategies[sc.ID]; ok {
+			if s.MLState == nil {
+				s.MLState = &MLState{}
+			}
+			s.MLState.AdaptationCount++
+		}
+		mu.Unlock()
+	}
+}
+
+// checkMLCorrelation checks if a new BUY is too correlated with existing positions.
+// Returns (blocked, reason).
+func checkMLCorrelation(sc StrategyConfig, symbol string, s *StrategyState, logger *StrategyLogger) (bool, string) {
+	var existing []string
+	for sym, pos := range s.Positions {
+		if pos.Quantity > 0 {
+			existing = append(existing, sym)
+		}
+	}
+	if len(existing) == 0 {
+		return false, ""
+	}
+	existingJSON, _ := json.Marshal(existing)
+	args := []string{symbol, string(existingJSON)}
+	stdout, stderr, err := RunPythonScript("shared_scripts/correlation_analyzer.py", args)
+	if err != nil {
+		logger.Error("[ml] correlation check failed: %v", err)
+		stderrStr := string(stderr)
+		if stderrStr != "" {
+			logger.Error("[ml] stderr: %s", stderrStr)
+		}
+		return false, "" // fail open
+	}
+	var result struct {
+		Blocked bool   `json:"blocked"`
+		Reason  string `json:"reason"`
+	}
+	if err := json.Unmarshal(stdout, &result); err != nil {
+		logger.Error("[ml] parse correlation result: %v", err)
+		return false, ""
+	}
+	return result.Blocked, result.Reason
+}
+
+// recordMLOutcome spawns record_ml_outcome.py to feed trade result into ML model.
+// Fire-and-forget — does not block the main loop.
+func recordMLOutcome(sc StrategyConfig, symbol string, profitPct float64, logger *StrategyLogger) {
+	was := "false"
+	if profitPct > 0 {
+		was = "true"
+	}
+	args := []string{
+		sc.ID, symbol,
+		fmt.Sprintf("%.4f", profitPct),
+		was,
+	}
+	_, stderr, err := RunPythonScript("shared_scripts/record_ml_outcome.py", args)
+	if err != nil {
+		logger.Error("[ml] record outcome failed: %v", err)
+		stderrStr := string(stderr)
+		if stderrStr != "" {
+			logger.Error("[ml] stderr: %s", stderrStr)
+		}
+		return
+	}
+	logger.Info("[ml] recorded outcome: profit=%.2f%% profitable=%s", profitPct, was)
 }
 
 // runOptionsCheck runs the options check subprocess and returns the parsed result.
@@ -1535,6 +1759,200 @@ func runOKXExecuteOrder(sc StrategyConfig, result *OKXResult, price, cash, posQt
 
 // executeOKXResult applies an OKX result to state. Must be called under Lock.
 func executeOKXResult(sc StrategyConfig, s *StrategyState, result *OKXResult, execResult *OKXExecuteResult, signalStr string, price float64, logger *StrategyLogger) (int, string) {
+	fillPrice := price
+	if execResult != nil && execResult.Execution != nil && execResult.Execution.Fill != nil && execResult.Execution.Fill.AvgPx > 0 {
+		fillPrice = execResult.Execution.Fill.AvgPx
+		logger.Info("Live fill at $%.2f (mid was $%.2f)", fillPrice, price)
+	}
+
+	trades, err := ExecuteSpotSignal(s, result.Signal, result.Symbol, fillPrice, logger)
+	if err != nil {
+		logger.Error("Trade execution failed: %v", err)
+		return 0, ""
+	}
+
+	detail := ""
+	if trades > 0 {
+		prefix := ""
+		if execResult != nil {
+			prefix = "LIVE "
+		}
+		detail = fmt.Sprintf("[%s] %s%s %s @ $%.2f", sc.ID, prefix, signalStr, result.Symbol, fillPrice)
+	}
+	return trades, detail
+}
+
+// binanceusIsLive reports whether --mode=live appears in BinanceUS strategy args.
+func binanceusIsLive(args []string) bool {
+for _, arg := range args {
+if arg == "--mode=live" {
+return true
+}
+}
+return false
+}
+
+// binanceusSymbol extracts the symbol from BinanceUS strategy args (e.g. "BTC/USDC").
+func binanceusSymbol(args []string) string {
+if len(args) >= 2 {
+return args[1]
+}
+return ""
+}
+
+// runBinanceUSExecuteOrder places a live market order on Binance (Phase 3, no lock).
+// Python script queries real exchange balance to compute buy size; sells use full asset balance.
+func runBinanceUSExecuteOrder(sc StrategyConfig, result *SpotResult, price float64, logger *StrategyLogger) (*BinanceUSExecuteResult, bool) {
+	side := "buy"
+	if result.Signal != 1 {
+		side = "sell"
+	}
+	logger.Info("Placing live Binance %s %s (balance-based sizing)", side, result.Symbol)
+
+	execResult, stderr, err := RunBinanceUSExecute(sc.Script, result.Symbol, side)
+	if stderr != "" {
+		logger.Info("execute stderr: %s", stderr)
+	}
+	if err != nil {
+		logger.Error("Live execute failed: %v", err)
+		return nil, false
+	}
+	if execResult.Error != "" {
+		logger.Error("Live execute returned error: %s", execResult.Error)
+		return nil, false
+	}
+	return execResult, true
+}
+
+// executeBinanceUSResult applies a BinanceUS live result to state. Must be called under Lock.
+func executeBinanceUSResult(sc StrategyConfig, s *StrategyState, result *SpotResult, execResult *BinanceUSExecuteResult, signalStr string, price float64, logger *StrategyLogger) (int, string) {
+fillPrice := price
+if execResult != nil && execResult.Execution != nil && execResult.Execution.Fill != nil && execResult.Execution.Fill.AvgPx > 0 {
+fillPrice = execResult.Execution.Fill.AvgPx
+logger.Info("Live fill at $%.2f (mid was $%.2f)", fillPrice, price)
+}
+
+trades, err := ExecuteSpotSignal(s, result.Signal, result.Symbol, fillPrice, logger)
+if err != nil {
+logger.Error("Trade execution failed: %v", err)
+return 0, ""
+}
+
+detail := ""
+if trades > 0 {
+prefix := ""
+if execResult != nil {
+prefix = "LIVE "
+}
+detail = fmt.Sprintf("[%s] %s%s %s @ $%.2f", sc.ID, prefix, signalStr, result.Symbol, fillPrice)
+}
+return trades, detail
+}
+
+// alpacaIsLive reports whether --mode=live appears in strategy args.
+func alpacaIsLive(args []string) bool {
+	for _, arg := range args {
+		if arg == "--mode=live" {
+			return true
+		}
+	}
+	return false
+}
+
+// alpacaSymbol extracts the stock ticker from strategy args (e.g. "AAPL").
+func alpacaSymbol(args []string) string {
+	if len(args) >= 2 {
+		return args[1]
+	}
+	return ""
+}
+
+// runAlpacaCheck runs check_alpaca.py signal-check mode (Phase 3, no lock).
+func runAlpacaCheck(sc StrategyConfig, prices map[string]float64, logger *StrategyLogger) (*AlpacaResult, string, float64, bool) {
+	args := sc.Args
+	if sc.HTFFilter {
+		args = append(append([]string{}, args...), "--htf-filter")
+	}
+	logger.Info("Running: python3 %s %v", sc.Script, args)
+
+	result, stderr, err := RunAlpacaCheck(sc.Script, args)
+	if err != nil {
+		logger.Error("Script failed: %v", err)
+		if stderr != "" {
+			logger.Error("stderr: %s", stderr)
+		}
+		return nil, "", 0, false
+	}
+	if stderr != "" {
+		logger.Info("stderr: %s", stderr)
+	}
+	if result.Error != "" {
+		logger.Error("Script returned error: %s", result.Error)
+		return nil, "", 0, false
+	}
+
+	signalStr := "HOLD"
+	if result.Signal == 1 {
+		signalStr = "BUY"
+	} else if result.Signal == -1 {
+		signalStr = "SELL"
+	}
+	logger.Info("Signal: %s | %s @ $%.2f [%s]", signalStr, result.Symbol, result.Price, result.Mode)
+
+	price := result.Price
+	if price <= 0 {
+		if p, ok := prices[result.Symbol]; ok {
+			price = p
+		}
+	}
+	if price <= 0 {
+		logger.Error("No price available for %s", result.Symbol)
+		return nil, "", 0, false
+	}
+	return result, signalStr, price, true
+}
+
+// runAlpacaExecuteOrder places a live stock order on Alpaca (Phase 3, no lock).
+func runAlpacaExecuteOrder(sc StrategyConfig, result *AlpacaResult, price, cash, posQty float64, logger *StrategyLogger) (*AlpacaExecuteResult, bool) {
+	isBuy := result.Signal == 1
+	var amountUSD float64
+	var quantity float64
+	side := "buy"
+
+	if isBuy {
+		amountUSD = cash * 0.95
+		if amountUSD < 1 || price <= 0 {
+			logger.Info("Insufficient cash ($%.2f) for live buy", cash)
+			return nil, false
+		}
+	} else {
+		side = "sell"
+		if posQty <= 0 {
+			logger.Info("No position to close for %s", result.Symbol)
+			return nil, false
+		}
+		quantity = posQty
+	}
+
+	logger.Info("Placing live %s %s amount_usd=%.2f qty=%.6f", side, result.Symbol, amountUSD, quantity)
+
+	execResult, stderr, err := RunAlpacaExecute(sc.Script, result.Symbol, side, amountUSD, quantity)
+	if stderr != "" {
+		logger.Info("execute stderr: %s", stderr)
+	}
+	if err != nil {
+		logger.Error("Live execute failed: %v", err)
+		return nil, false
+	}
+	if execResult.Error != "" {
+		logger.Error("Live execute returned error: %s", execResult.Error)
+		return nil, false
+	}
+	return execResult, true
+}
+
+// executeAlpacaResult applies an Alpaca live result to state. Must be called under Lock.
+func executeAlpacaResult(sc StrategyConfig, s *StrategyState, result *AlpacaResult, execResult *AlpacaExecuteResult, signalStr string, price float64, logger *StrategyLogger) (int, string) {
 	fillPrice := price
 	if execResult != nil && execResult.Execution != nil && execResult.Execution.Fill != nil && execResult.Execution.Fill.AvgPx > 0 {
 		fillPrice = execResult.Execution.Fill.AvgPx

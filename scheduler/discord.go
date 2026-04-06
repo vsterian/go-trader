@@ -280,7 +280,7 @@ func FormatCategorySummary(
 		sort.Strings(syms)
 		parts := make([]string, 0, len(syms))
 		for _, sym := range syms {
-			short := strings.TrimSuffix(sym, "/USDT")
+			short := strings.TrimSuffix(sym, "/USDC")
 			if isFutures {
 				if fullName, ok := futuresFullNames[strings.ToUpper(short)]; ok {
 					parts = append(parts, fmt.Sprintf("%s (%s) $%.0f", short, fullName, displayPrices[sym]))
@@ -388,10 +388,10 @@ func extractStrategyName(sc StrategyConfig) string {
 
 func extractAsset(sc StrategyConfig) string {
 	// Args[1] is the canonical asset source for all strategy types.
-	// Spot uses "BTC/USDT" style symbols; strip the quote currency.
+	// Spot uses "BTC/USDC" style symbols; strip the quote currency.
 	if len(sc.Args) > 1 {
 		asset := strings.ToUpper(sc.Args[1])
-		return strings.TrimSuffix(asset, "/USDT")
+		return strings.TrimSuffix(asset, "/USDC")
 	}
 	return ""
 }

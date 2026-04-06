@@ -37,7 +37,7 @@ def walk_forward_optimize(
     train_pct: float = 0.7,
     optimize_metric: str = "sharpe_ratio",
     initial_capital: float = 1000.0,
-    symbol: str = "BTC/USDT",
+    symbol: str = "BTC/USDC",
     timeframe: str = "1d",
     verbose: bool = True,
 ) -> dict:

@@ -73,7 +73,7 @@ class TestMarketData:
         mock_ex.fetch_ticker.return_value = {"last": 67500.0}
         price = a.get_spot_price("BTC")
         assert price == 67500.0
-        mock_ex.fetch_ticker.assert_called_once_with("BTC/USDT")
+        mock_ex.fetch_ticker.assert_called_once_with("BTC/USDC")
 
     def test_get_spot_price_tries_multiple_suffixes(self, adapter):
         a, mock_ex = adapter
@@ -96,7 +96,7 @@ class TestMarketData:
         mock_ex.fetch_ohlcv.return_value = candles
         result = a.get_ohlcv("BTC", "1h", 200)
         assert result == candles
-        mock_ex.fetch_ohlcv.assert_called_once_with("BTC/USDT", "1h", limit=200)
+        mock_ex.fetch_ohlcv.assert_called_once_with("BTC/USDC", "1h", limit=200)
 
     def test_get_ohlcv_on_error(self, adapter):
         a, mock_ex = adapter
@@ -123,14 +123,14 @@ class TestMarketData:
         mock_ex.fetch_ohlcv.return_value = candles
         result = a.get_perp_ohlcv("BTC", "1h", 200)
         assert result == candles
-        mock_ex.fetch_ohlcv.assert_called_once_with("BTC/USDT:USDT", "1h", limit=200)
+        mock_ex.fetch_ohlcv.assert_called_once_with("BTC/USDC:USDC", "1h", limit=200)
 
     def test_get_funding_rate(self, adapter):
         a, mock_ex = adapter
         mock_ex.fetch_funding_rate.return_value = {"fundingRate": 0.0001}
         rate = a.get_funding_rate("BTC")
         assert rate == 0.0001
-        mock_ex.fetch_funding_rate.assert_called_once_with("BTC/USDT:USDT")
+        mock_ex.fetch_funding_rate.assert_called_once_with("BTC/USDC:USDC")
 
     def test_get_funding_rate_on_error(self, adapter):
         a, mock_ex = adapter
@@ -173,7 +173,7 @@ class TestOrderExecution:
         result = a.market_open("BTC", True, 0.5, inst_type="spot")
         assert result == {"id": "123"}
         mock_ex.create_market_order.assert_called_once_with(
-            "BTC/USDT", "buy", 0.5, params={"tdMode": "cash"}
+            "BTC/USDC", "buy", 0.5, params={"tdMode": "cash"}
         )
 
     def test_market_open_swap(self, adapter):
@@ -183,7 +183,7 @@ class TestOrderExecution:
         result = a.market_open("BTC", False, 1.0, inst_type="swap")
         assert result == {"id": "456"}
         mock_ex.create_market_order.assert_called_once_with(
-            "BTC/USDT:USDT", "sell", 1.0, params={"tdMode": "cross"}
+            "BTC/USDC:USDC", "sell", 1.0, params={"tdMode": "cross"}
         )
 
     def test_market_close_with_position(self, adapter):
@@ -196,7 +196,7 @@ class TestOrderExecution:
         result = a.market_close("BTC")
         assert result == {"id": "789"}
         mock_ex.create_market_order.assert_called_once_with(
-            "BTC/USDT:USDT", "sell", 1.5,
+            "BTC/USDC:USDC", "sell", 1.5,
             params={"tdMode": "cross", "reduceOnly": True}
         )
 
