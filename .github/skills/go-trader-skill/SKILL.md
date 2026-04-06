@@ -502,6 +502,12 @@ Environment="TOPSTEP_API_SECRET={secret}"
 Environment="TOPSTEP_ACCOUNT_ID={account_id}"
 ```
 
+If Alpaca live trading:
+```ini
+Environment="ALPACA_PUBLIC_KEY={key_id}"
+Environment="ALPACA_SECRET_KEY={secret_key}"
+```
+
 ```bash
 mkdir -p logs
 sudo cp go-trader.service /etc/systemd/system/
@@ -965,13 +971,14 @@ When the user says `/menu`, "show menu", "what can I configure", "what's availab
 === GO-TRADER MENU ===
 
 1. TRADING PLATFORMS
-   • Binance US  — spot trading: BTC, ETH, SOL
+   • Binance US  — spot trading: BTC, ETH, SOL (paper + live)
    • Deribit     — options trading: BTC, ETH
    • IBKR / CME  — options trading: BTC, ETH (CME Micro contracts, Black-Scholes pricing)
    • Hyperliquid — perps trading: any HL-listed asset (paper + live)
    • TopStep     — futures trading: ES, NQ, MES, MNQ, CL, GC (paper + live)
    • Robinhood   — crypto trading: BTC, ETH, SOL, DOGE, etc. (paper via yfinance + live via robin_stocks)
    • Robinhood   — stock options: SPY, QQQ, AAPL, etc. (paper via Black-Scholes + live via robin_stocks)
+   • Alpaca      — US stock trading: AAPL, SPY, MSFT, etc. (paper + live, commission-free, alpaca-py SDK)
    • Custom      — add your own exchange via Step 9 (guided setup)
 
 2. AVAILABLE STRATEGIES
@@ -1011,6 +1018,7 @@ When the user says `/menu`, "show menu", "what can I configure", "what's availab
      BINANCE_API_KEY, BINANCE_API_SECRET
      TOPSTEP_API_KEY, TOPSTEP_API_SECRET, TOPSTEP_ACCOUNT_ID
      ROBINHOOD_USERNAME, ROBINHOOD_PASSWORD, ROBINHOOD_TOTP_SECRET
+     ALPACA_PUBLIC_KEY, ALPACA_SECRET_KEY
 
 4. COMMANDS
    /menu       — this overview
@@ -1150,6 +1158,8 @@ Set via systemd override (`sudo systemctl edit go-trader`):
 | `ROBINHOOD_USERNAME` | Robinhood account email (crypto live trading only) |
 | `ROBINHOOD_PASSWORD` | Robinhood account password (crypto live trading only) |
 | `ROBINHOOD_TOTP_SECRET` | TOTP secret for Robinhood MFA (base32 string from authenticator setup) |
+| `ALPACA_PUBLIC_KEY` | Alpaca API key ID (US stock live trading only) |
+| `ALPACA_SECRET_KEY` | Alpaca API secret key (US stock live trading only) |
 
 ### Example: Adjusting a Strategy
 
@@ -1303,3 +1313,23 @@ OKX options use the unified `check_options.py` with `--platform=okx`:
 Paper mode uses public OKX API (no credentials). For live trading, change `--mode=paper` to `--mode=live`. Requires `OKX_API_KEY`, `OKX_API_SECRET`, `OKX_PASSPHRASE` env vars. Set `OKX_SANDBOX=1` for the OKX demo trading environment.
 
 Discord channel keys: `"okx"` for spot/perps, `"okx-options"` for options.
+
+### Alpaca US Stock Entries
+
+Each Alpaca strategy runs the spot strategy suite on US stock tickers:
+
+```json
+{"id": "alpaca-sma-aapl", "type": "spot", "platform": "alpaca", "script": "shared_scripts/check_alpaca.py", "args": ["sma_crossover", "AAPL", "1h", "--mode=paper"], "capital": 1000, "max_drawdown_pct": 5, "interval_seconds": 3600}
+{"id": "alpaca-rsi-spy", "type": "spot", "platform": "alpaca", "script": "shared_scripts/check_alpaca.py", "args": ["rsi", "SPY", "1h", "--mode=paper"], "capital": 1000, "max_drawdown_pct": 5, "interval_seconds": 3600}
+```
+
+**ID convention:** `alpaca-{strategy_short}-{symbol}` (e.g. `alpaca-sma-aapl`, `alpaca-rsi-spy`)
+
+Paper mode uses Alpaca paper endpoint (virtual money, real market data). For live trading, change `--mode=paper` to `--mode=live`. Requires `ALPACA_PUBLIC_KEY`, `ALPACA_SECRET_KEY` env vars. Zero commissions.
+
+Discord channel key: `"alpaca"`.
+
+**Non-interactive config generation:**
+```bash
+./go-trader init --json '{"assets":["BTC"],"enableAlpaca":true,"alpacaStrategies":["sma_crossover","rsi","momentum"],"alpacaSymbols":["AAPL","SPY","MSFT"],"alpacaCapital":1000,"alpacaDrawdown":5,"alpacaMode":"paper"}' --output scheduler/config.json
+```

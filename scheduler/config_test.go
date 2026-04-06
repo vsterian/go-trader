@@ -60,6 +60,7 @@ func TestLoadConfigPlatformInference(t *testing.T) {
 		{"rh-btc-sma", "robinhood"},
 		{"okx-btc-sma", "okx"},
 		{"luno-btc-sma", "luno"},
+		{"alpaca-sma-aapl", "alpaca"},
 		{"spot-btc-sma", "binanceus"},
 	}
 

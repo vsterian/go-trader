@@ -254,6 +254,12 @@ type InitOptions struct {
 	MLSellBase              float64           `json:"mlSellBase,omitempty"`    // ML sell threshold base (default 0.70)
 	MLAdaptation            bool              `json:"mlAdaptation,omitempty"`  // enable ML adaptation/self-optimization
 	BinanceLive             bool              `json:"binanceLive,omitempty"`   // enable live trading for BinanceUS spot
+	EnableAlpaca            bool
+	AlpacaMode              string   // "paper" or "live"
+	AlpacaStrategies        []string // selected spot strategy IDs for Alpaca
+	AlpacaSymbols           []string // US stock tickers (e.g. ["AAPL", "SPY"])
+	AlpacaCapital           float64
+	AlpacaDrawdown          float64
 }
 
 // generateConfig builds a Config from InitOptions. Pure function, no I/O.
@@ -557,6 +563,40 @@ func generateConfig(opts InitOptions) *Config {
 		}
 	}
 
+	usesAlpaca := false
+	if opts.EnableAlpaca {
+		usesAlpaca = true
+		alpacaMode := opts.AlpacaMode
+		if alpacaMode == "" {
+			alpacaMode = "paper"
+		}
+		symbols := opts.AlpacaSymbols
+		if len(symbols) == 0 {
+			symbols = []string{"AAPL", "SPY", "MSFT"}
+		}
+		for _, stratID := range opts.AlpacaStrategies {
+			shortName := deriveShortName(stratID)
+			for _, sym := range symbols {
+				id := fmt.Sprintf("alpaca-%s-%s", shortName, strings.ToLower(sym))
+				cfg.Strategies = append(cfg.Strategies, StrategyConfig{
+					ID:              id,
+					Type:            "spot",
+					Platform:        "alpaca",
+					Script:          "shared_scripts/check_alpaca.py",
+					Args:            []string{stratID, sym, "1h", fmt.Sprintf("--mode=%s", alpacaMode)},
+					Capital:         opts.AlpacaCapital,
+					MaxDrawdownPct:  opts.AlpacaDrawdown,
+					IntervalSeconds: 3600,
+				})
+			}
+		}
+	}
+	if usesAlpaca {
+		cfg.Platforms["alpaca"] = &PlatformConfig{
+			StateFile: "platforms/alpaca/state.json",
+		}
+	}
+
 	// Apply HTF filter to all non-options strategies if enabled.
 	// Skip delta_neutral_funding — trend direction is irrelevant to funding-rate harvesting (#103).
 	if opts.HTFFilter {
@@ -648,7 +688,7 @@ func runInitFromJSON(jsonStr string, outputPath string) int {
 		fmt.Fprintln(os.Stderr, "Error: at least one asset required")
 		return 1
 	}
-	if !opts.EnableSpot && !opts.EnableOptions && !opts.EnablePerps && !opts.EnableFutures && !opts.EnableRobinhood && !opts.EnableLuno && !opts.EnableOKX {
+	if !opts.EnableSpot && !opts.EnableOptions && !opts.EnablePerps && !opts.EnableFutures && !opts.EnableRobinhood && !opts.EnableLuno && !opts.EnableOKX && !opts.EnableAlpaca {
 		fmt.Fprintln(os.Stderr, "Error: at least one strategy type must be enabled")
 		return 1
 	}
@@ -761,6 +801,27 @@ func runInitFromJSON(jsonStr string, outputPath string) int {
 		}
 	}
 
+	// Auto-populate Alpaca defaults.
+	if opts.EnableAlpaca {
+		if opts.AlpacaMode == "" {
+			opts.AlpacaMode = "paper"
+		}
+		if len(opts.AlpacaStrategies) == 0 {
+			for _, s := range spotStrategies {
+				opts.AlpacaStrategies = append(opts.AlpacaStrategies, s.ID)
+			}
+		}
+		if len(opts.AlpacaSymbols) == 0 {
+			opts.AlpacaSymbols = []string{"AAPL", "SPY", "MSFT"}
+		}
+		if opts.AlpacaCapital == 0 {
+			opts.AlpacaCapital = 1000
+		}
+		if opts.AlpacaDrawdown == 0 {
+			opts.AlpacaDrawdown = 5
+		}
+	}
+
 	// Migrate deprecated SpotChannelID/OptionsChannelID into ChannelMap.
 	if opts.ChannelMap == nil && (opts.SpotChannelID != "" || opts.OptionsChannelID != "") {
 		opts.ChannelMap = make(map[string]string)
@@ -836,9 +897,9 @@ func runInit(args []string) int {
 	}
 
 	// Step 3: Strategy types.
-	stratTypeNames := []string{"spot", "options", "perps", "futures", "robinhood", "luno", "okx"}
+	stratTypeNames := []string{"spot", "options", "perps", "futures", "robinhood", "luno", "okx", "alpaca"}
 	stratTypeIdxs := p.MultiSelect("\nSelect strategy types:", stratTypeNames, false)
-	enableSpot, enableOptions, enablePerps, enableFutures, enableRobinhood, enableLuno, enableOKX := false, false, false, false, false, false, false
+	enableSpot, enableOptions, enablePerps, enableFutures, enableRobinhood, enableLuno, enableOKX, enableAlpaca := false, false, false, false, false, false, false, false
 	for _, idx := range stratTypeIdxs {
 		switch stratTypeNames[idx] {
 		case "spot":
@@ -855,9 +916,11 @@ func runInit(args []string) int {
 			enableLuno = true
 		case "okx":
 			enableOKX = true
+		case "alpaca":
+			enableAlpaca = true
 		}
 	}
-	if !enableSpot && !enableOptions && !enablePerps && !enableFutures && !enableRobinhood && !enableLuno && !enableOKX {
+	if !enableSpot && !enableOptions && !enablePerps && !enableFutures && !enableRobinhood && !enableLuno && !enableOKX && !enableAlpaca {
 		fmt.Println("No strategy types selected. Aborted.")
 		return 1
 	}
@@ -937,6 +1000,27 @@ func runInit(args []string) int {
 		modeOptions := []string{"paper (safe default)", "live (requires OKX_API_KEY/API_SECRET/PASSPHRASE)"}
 		if p.Choice("\nOKX trading mode:", modeOptions, 0) == 1 {
 			okxMode = "live"
+		}
+	}
+
+	// Step 5e: Alpaca mode + symbol selection.
+	alpacaMode := "paper"
+	var alpacaSymbols []string
+	if enableAlpaca {
+		modeOptions := []string{"paper (safe default)", "live (requires ALPACA_PUBLIC_KEY/ALPACA_SECRET_KEY)"}
+		if p.Choice("\nAlpaca trading mode:", modeOptions, 0) == 1 {
+			alpacaMode = "live"
+		}
+		defaultSymbols := "AAPL,SPY,MSFT"
+		symStr := p.String("Alpaca stock symbols (comma-separated)", defaultSymbols)
+		for _, s := range strings.Split(symStr, ",") {
+			s = strings.TrimSpace(s)
+			if s != "" {
+				alpacaSymbols = append(alpacaSymbols, strings.ToUpper(s))
+			}
+		}
+		if len(alpacaSymbols) == 0 {
+			alpacaSymbols = []string{"AAPL", "SPY", "MSFT"}
 		}
 	}
 
@@ -1026,7 +1110,21 @@ func runInit(args []string) int {
 		}
 	}
 
-	if len(selectedSpotStrats) == 0 && !includePairs && len(selectedOptStrats) == 0 && !enablePerps && !enableFutures && !enableRobinhood && !enableLuno && !enableOKX {
+	// Step 7e: Alpaca strategy selection.
+	var selectedAlpacaStrats []string
+	if enableAlpaca {
+		fmt.Println("\n--- Alpaca US Stock Strategies ---")
+		alpacaNames := make([]string, len(spotStrategies))
+		for i, s := range spotStrategies {
+			alpacaNames[i] = s.ID
+		}
+		alpacaIdxs := p.MultiSelect("\nSelect Alpaca strategies:", alpacaNames, false)
+		for _, idx := range alpacaIdxs {
+			selectedAlpacaStrats = append(selectedAlpacaStrats, spotStrategies[idx].ID)
+		}
+	}
+
+	if len(selectedSpotStrats) == 0 && !includePairs && len(selectedOptStrats) == 0 && !enablePerps && !enableFutures && !enableRobinhood && !enableLuno && !enableOKX && !enableAlpaca {
 		fmt.Println("No strategies selected. Aborted.")
 		return 1
 	}
@@ -1083,6 +1181,13 @@ func runInit(args []string) int {
 		okxDrawdown = p.Float("OKX max drawdown (%)", 5)
 	}
 
+	alpacaCapital := 1000.0
+	alpacaDrawdown := 5.0
+	if enableAlpaca {
+		alpacaCapital = p.Float("Alpaca capital per strategy ($)", 1000)
+		alpacaDrawdown = p.Float("Alpaca max drawdown (%)", 5)
+	}
+
 	// Step 9: Discord.
 	fmt.Println("\n--- Discord Notifications ---")
 	discordEnabled := p.YesNo("Enable Discord notifications?", false)
@@ -1124,6 +1229,11 @@ func runInit(args []string) int {
 		if enableOKX {
 			if ch := p.String("OKX channel ID (leave blank to skip)", ""); ch != "" {
 				channelMap["okx"] = ch
+			}
+		}
+		if enableAlpaca {
+			if ch := p.String("Alpaca channel ID (leave blank to skip)", ""); ch != "" {
+				channelMap["alpaca"] = ch
 			}
 		}
 		discordOwnerID = p.String("Your Discord user ID for DM upgrades (leave blank to skip)", "")
@@ -1247,6 +1357,14 @@ func runInit(args []string) int {
 		}
 	}
 
+	// Collect Alpaca strategy IDs.
+	alpacaStratIDs := selectedAlpacaStrats
+	if enableAlpaca && len(alpacaStratIDs) == 0 {
+		for _, s := range spotStrategies {
+			alpacaStratIDs = append(alpacaStratIDs, s.ID)
+		}
+	}
+
 	opts := InitOptions{
 		OutputPath:              outputPath,
 		Assets:                  selectedAssets,
@@ -1288,6 +1406,12 @@ func runInit(args []string) int {
 		OKXPerpsStrategies:      okxPerpsStratIDs,
 		OKXCapital:              okxCapital,
 		OKXDrawdown:             okxDrawdown,
+		EnableAlpaca:            enableAlpaca,
+		AlpacaMode:              alpacaMode,
+		AlpacaStrategies:        alpacaStratIDs,
+		AlpacaSymbols:           alpacaSymbols,
+		AlpacaCapital:           alpacaCapital,
+		AlpacaDrawdown:          alpacaDrawdown,
 		HTFFilter:               htfFilter,
 		DiscordEnabled:          discordEnabled,
 		DiscordOwnerID:          discordOwnerID,

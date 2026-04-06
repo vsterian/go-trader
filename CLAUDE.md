@@ -29,7 +29,8 @@
   - `check_topstep.py` — TopStep futures checker (`<strategy> <symbol> <timeframe> [--mode=paper|live]`; `--execute` for live orders)
   - `check_robinhood.py` — Robinhood crypto checker (`<strategy> <symbol> <timeframe> [--mode=paper|live]`; `--execute` for live orders; OHLCV via yfinance)
   - `check_okx.py` — OKX spot/perps checker (`<strategy> <symbol> <timeframe> [--mode=paper|live] [--inst-type=spot|swap]`; `--execute` for live orders; CCXT)
-- `platforms/` — platform-specific adapters (deribit, ibkr, binanceus, hyperliquid, topstep, robinhood, okx)
+  - `check_alpaca.py` — Alpaca US stock checker (`<strategy> <symbol> <timeframe> [--mode=paper|live]`; `--execute` for live orders; alpaca-py SDK)
+- `platforms/` — platform-specific adapters (deribit, ibkr, binanceus, hyperliquid, topstep, robinhood, okx, alpaca)
   - `deribit/adapter.py` — DeribitExchangeAdapter (live quotes, real expiries/strikes)
   - `ibkr/adapter.py` — IBKRExchangeAdapter (CME strikes, Black-Scholes pricing)
   - `binanceus/adapter.py` — BinanceUSExchangeAdapter (spot only)
@@ -37,6 +38,7 @@
   - `topstep/adapter.py` — TopStepExchangeAdapter (CME futures, paper mode via yfinance, live via TopStepX API)
   - `robinhood/adapter.py` — RobinhoodExchangeAdapter (crypto spot + stock options, paper mode via yfinance/Black-Scholes, live via robin_stocks + TOTP MFA)
   - `okx/adapter.py` — OKXExchangeAdapter (spot + perps + options via CCXT; paper mode uses public API, live mode requires `OKX_API_KEY`, `OKX_API_SECRET`, `OKX_PASSPHRASE`)
+  - `alpaca/adapter.py` — AlpacaExchangeAdapter (US stock spot trading via alpaca-py; paper mode uses paper endpoint, live mode requires `ALPACA_PUBLIC_KEY`, `ALPACA_SECRET_KEY`)
 - `shared_tools/` — shared Python utilities (pricing.py, exchange_base.py, data_fetcher, storage)
 - `shared_strategies/` — shared strategy logic (spot/, options/, futures/)
 - `backtest/` — backtesting and paper trading scripts
@@ -55,7 +57,7 @@
 - Per-strategy loop uses 6 fine-grained lock phases: RLock(read inputs) → Lock(CheckRisk) → no lock(subprocess) → Lock(execute signal) → RLock/no lock/Lock(mark prices) → RLock(status log)
 - Audit lock balance: `grep -n "mu\.\(R\)\?Lock\(\)\|mu\.\(R\)\?Unlock\(\)" scheduler/main.go`
 - Platform dispatch: `StrategyConfig.Platform` field (inferred from ID prefix in LoadConfig); use `s.Platform == "ibkr"` not ID prefix checks
-- ID prefix → platform: `hl-` → hyperliquid, `ibkr-` → ibkr, `deribit-` → deribit, `ts-` → topstep, `rh-` → robinhood, `okx-` → okx, else → binanceus
+- ID prefix → platform: `hl-` → hyperliquid, `ibkr-` → ibkr, `deribit-` → deribit, `ts-` → topstep, `rh-` → robinhood, `okx-` → okx, `alpaca-` → alpaca, else → binanceus
 - Robinhood options use stock symbols (SPY, QQQ, AAPL) not crypto assets; strategy IDs: `rh-ccall-spy`, `rh-vol-qqq`; options config uses `--platform=robinhood` arg to check_options.py
 - Strategy types: "spot", "options", "perps", "futures" — perps paper mode reuses `ExecuteSpotSignal`; live mode calls `RunHyperliquidExecute` before state update; futures use `ExecuteFuturesSignal` with whole-contract sizing and margin-based budgeting
 - Live execution guard: every platform dispatch in main.go must use `liveExecFailed` pattern — when `runXxxExecuteOrder` returns `ok2=false`, set `liveExecFailed = true` and skip state update; audit with `grep -n "liveExecFailed" scheduler/main.go`
@@ -63,7 +65,7 @@
 - `notifier.go` — `MultiNotifier` wraps Discord + Telegram backends; new notification features should add methods to `MultiNotifier`, not access `backends` directly
 - Hyperliquid sys.path conflict: SDK installs as `hyperliquid` package — clashes with `platforms/hyperliquid/`; fix: add `platforms/hyperliquid/` directly to sys.path (not `platforms/`), then `from adapter import HyperliquidExchangeAdapter`
 - Hyperliquid SDK funding rates: `info.meta_and_asset_ctxs()` returns current predicted funding rate per asset (NOT `info.meta()` which only returns universe metadata); `info.funding_history(coin, startTime)` for historical rates; response uses parallel arrays — universe[i] matches asset_ctxs[i]
-- Fee dispatch: `CalculatePlatformSpotFee(platform, value)` — 0.035% hyperliquid, 0% robinhood, 0.1% binanceus (replaces bare `CalculateSpotFee` for platform-aware spot/perps trades); `CalculateFuturesFee(contracts, feePerContract)` and `CalculatePlatformFuturesFee(sc, contracts)` for futures per-contract fees
+- Fee dispatch: `CalculatePlatformSpotFee(platform, value)` — 0.035% hyperliquid, 0% robinhood, 0% alpaca, 0.1% binanceus (replaces bare `CalculateSpotFee` for platform-aware spot/perps trades); `CalculateFuturesFee(contracts, feePerContract)` and `CalculatePlatformFuturesFee(sc, contracts)` for futures per-contract fees
 - State persisted to `scheduler/state.json` (path set in config); per-platform files at `platforms/<name>/state.json`
 - `cfg.Discord.Channels` is `map[string]string` (not a struct); keys: "spot", "options", "hyperliquid", etc. — old `.Spot`/`.Options` field access is invalid
 - `cfg.Discord.OwnerID` — Discord user ID for DM upgrade prompts + config migration; loaded from `DISCORD_OWNER_ID` env var (takes priority over config file)

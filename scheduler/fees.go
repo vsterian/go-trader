@@ -59,6 +59,8 @@ func CalculatePlatformSpotFee(platform string, value float64) float64 {
 		return 0 // Robinhood charges no crypto commission
 	case "okx":
 		return value * OKXSpotTakerFeePct
+	case "alpaca":
+		return 0 // Alpaca charges zero commission on stock trades
 	default:
 		return CalculateSpotFee(value)
 	}

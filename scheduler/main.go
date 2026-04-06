@@ -449,6 +449,16 @@ func main() {
 							}
 						}
 					}
+					var alpacaCash float64
+					var alpacaPosQty float64
+					if sc.Platform == "alpaca" && alpacaIsLive(sc.Args) {
+						alpacaCash = stratState.Cash
+						if sym := alpacaSymbol(sc.Args); sym != "" {
+							if pos, ok := stratState.Positions[sym]; ok {
+								alpacaPosQty = pos.Quantity
+							}
+						}
+					}
 					var tsCash float64
 					var tsContracts float64
 					if sc.Type == "futures" && topstepIsLive(sc.Args) {
@@ -562,6 +572,25 @@ func main() {
 								}
 								if sc.MLConfig != nil && sc.MLConfig.Enabled && result.Signal == -1 && trades > 0 {
 									go recordMLOutcome(sc, result.Symbol, mlProfitPct, logger)
+								}
+							}
+						} else if sc.Platform == "alpaca" {
+							// Alpaca US stock trading (paper + live)
+							if result, signalStr, price, ok := runAlpacaCheck(sc, prices, logger); ok {
+								prices[result.Symbol] = price
+								var execResult *AlpacaExecuteResult
+								liveExecFailed := false
+								if alpacaIsLive(sc.Args) && result.Signal != 0 {
+									if er, ok2 := runAlpacaExecuteOrder(sc, result, price, alpacaCash, alpacaPosQty, logger); ok2 {
+										execResult = er
+									} else {
+										liveExecFailed = true
+									}
+								}
+								if !liveExecFailed {
+									mu.Lock()
+									trades, detail = executeAlpacaResult(sc, stratState, result, execResult, signalStr, price, logger)
+									mu.Unlock()
 								}
 							}
 						} else {
@@ -1811,4 +1840,131 @@ prefix = "LIVE "
 detail = fmt.Sprintf("[%s] %s%s %s @ $%.2f", sc.ID, prefix, signalStr, result.Symbol, fillPrice)
 }
 return trades, detail
+}
+
+// alpacaIsLive reports whether --mode=live appears in strategy args.
+func alpacaIsLive(args []string) bool {
+	for _, arg := range args {
+		if arg == "--mode=live" {
+			return true
+		}
+	}
+	return false
+}
+
+// alpacaSymbol extracts the stock ticker from strategy args (e.g. "AAPL").
+func alpacaSymbol(args []string) string {
+	if len(args) >= 2 {
+		return args[1]
+	}
+	return ""
+}
+
+// runAlpacaCheck runs check_alpaca.py signal-check mode (Phase 3, no lock).
+func runAlpacaCheck(sc StrategyConfig, prices map[string]float64, logger *StrategyLogger) (*AlpacaResult, string, float64, bool) {
+	args := sc.Args
+	if sc.HTFFilter {
+		args = append(append([]string{}, args...), "--htf-filter")
+	}
+	logger.Info("Running: python3 %s %v", sc.Script, args)
+
+	result, stderr, err := RunAlpacaCheck(sc.Script, args)
+	if err != nil {
+		logger.Error("Script failed: %v", err)
+		if stderr != "" {
+			logger.Error("stderr: %s", stderr)
+		}
+		return nil, "", 0, false
+	}
+	if stderr != "" {
+		logger.Info("stderr: %s", stderr)
+	}
+	if result.Error != "" {
+		logger.Error("Script returned error: %s", result.Error)
+		return nil, "", 0, false
+	}
+
+	signalStr := "HOLD"
+	if result.Signal == 1 {
+		signalStr = "BUY"
+	} else if result.Signal == -1 {
+		signalStr = "SELL"
+	}
+	logger.Info("Signal: %s | %s @ $%.2f [%s]", signalStr, result.Symbol, result.Price, result.Mode)
+
+	price := result.Price
+	if price <= 0 {
+		if p, ok := prices[result.Symbol]; ok {
+			price = p
+		}
+	}
+	if price <= 0 {
+		logger.Error("No price available for %s", result.Symbol)
+		return nil, "", 0, false
+	}
+	return result, signalStr, price, true
+}
+
+// runAlpacaExecuteOrder places a live stock order on Alpaca (Phase 3, no lock).
+func runAlpacaExecuteOrder(sc StrategyConfig, result *AlpacaResult, price, cash, posQty float64, logger *StrategyLogger) (*AlpacaExecuteResult, bool) {
+	isBuy := result.Signal == 1
+	var amountUSD float64
+	var quantity float64
+	side := "buy"
+
+	if isBuy {
+		amountUSD = cash * 0.95
+		if amountUSD < 1 || price <= 0 {
+			logger.Info("Insufficient cash ($%.2f) for live buy", cash)
+			return nil, false
+		}
+	} else {
+		side = "sell"
+		if posQty <= 0 {
+			logger.Info("No position to close for %s", result.Symbol)
+			return nil, false
+		}
+		quantity = posQty
+	}
+
+	logger.Info("Placing live %s %s amount_usd=%.2f qty=%.6f", side, result.Symbol, amountUSD, quantity)
+
+	execResult, stderr, err := RunAlpacaExecute(sc.Script, result.Symbol, side, amountUSD, quantity)
+	if stderr != "" {
+		logger.Info("execute stderr: %s", stderr)
+	}
+	if err != nil {
+		logger.Error("Live execute failed: %v", err)
+		return nil, false
+	}
+	if execResult.Error != "" {
+		logger.Error("Live execute returned error: %s", execResult.Error)
+		return nil, false
+	}
+	return execResult, true
+}
+
+// executeAlpacaResult applies an Alpaca live result to state. Must be called under Lock.
+func executeAlpacaResult(sc StrategyConfig, s *StrategyState, result *AlpacaResult, execResult *AlpacaExecuteResult, signalStr string, price float64, logger *StrategyLogger) (int, string) {
+	fillPrice := price
+	if execResult != nil && execResult.Execution != nil && execResult.Execution.Fill != nil && execResult.Execution.Fill.AvgPx > 0 {
+		fillPrice = execResult.Execution.Fill.AvgPx
+		logger.Info("Live fill at $%.2f (mid was $%.2f)", fillPrice, price)
+	}
+
+	trades, err := ExecuteSpotSignal(s, result.Signal, result.Symbol, fillPrice, logger)
+	if err != nil {
+		logger.Error("Trade execution failed: %v", err)
+		return 0, ""
+	}
+
+	detail := ""
+	if trades > 0 {
+		prefix := ""
+		if execResult != nil {
+			prefix = "LIVE "
+		}
+		detail = fmt.Sprintf("[%s] %s%s %s @ $%.2f", sc.ID, prefix, signalStr, result.Symbol, fillPrice)
+	}
+	return trades, detail
 }
