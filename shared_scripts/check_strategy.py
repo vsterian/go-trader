@@ -318,7 +318,13 @@ def main():
                 rule_signal = signal
                 strong_mult = 1.5
 
-                if signal == 1:
+                if not ml.is_trained:
+                    # Cold-start: model has no training data yet.
+                    # Pass rule-based signals through so trades can execute
+                    # and the model can begin learning from outcomes.
+                    if signal != 0:
+                        print(f"ML: untrained — passing rule signal={signal} through", file=sys.stderr)
+                elif signal == 1:
                     # Rule says BUY — ML must agree
                     if buy_prob < buy_thresh:
                         signal = 0  # ML blocks the buy
@@ -329,7 +335,7 @@ def main():
                         signal = 0  # ML blocks the sell
                         print(f"ML: blocked SELL (prob={sell_prob:.3f} < thresh={sell_thresh:.3f})", file=sys.stderr)
                 elif signal == 0:
-                    # No rule signal — check for strong ML override
+                    # No rule signal — check for strong ML override (only when trained)
                     if buy_prob > buy_thresh * strong_mult:
                         signal = 1  # Strong ML buy
                         print(f"ML: strong BUY override (prob={buy_prob:.3f})", file=sys.stderr)

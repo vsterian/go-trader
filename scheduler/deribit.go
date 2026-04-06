@@ -64,7 +64,7 @@ func (d *DeribitPricer) GetOptionPrice(underlying, optionType string, strike flo
 	// If exact doesn't exist, try to find nearest expiry with same strike
 	nearestInstrument, findErr := d.findNearestExpiry(underlying, optionType, strike, expiry)
 	if findErr != nil {
-		return 0, 0, fmt.Errorf("exact match failed: %w, nearest search failed: %w", err, findErr)
+		return 0, 0, fmt.Errorf("exact match failed: %v, nearest search failed: %w", err, findErr)
 	}
 
 	markPrice, spotPrice, err = d.fetchTicker(nearestInstrument)
@@ -129,7 +129,7 @@ func (d *DeribitPricer) GetOptionPriceFull(underlying, optionType string, strike
 
 	nearestInstrument, findErr := d.findNearestExpiry(underlying, optionType, strike, expiry)
 	if findErr != nil {
-		return 0, 0, OptGreeks{}, fmt.Errorf("exact match failed: %w, nearest search failed: %w", err, findErr)
+		return 0, 0, OptGreeks{}, fmt.Errorf("exact match failed: %v, nearest search failed: %w", err, findErr)
 	}
 
 	ticker, err = d.fetchTickerFull(nearestInstrument)

@@ -113,6 +113,8 @@ func main() {
 			fmt.Println("State saved successfully.")
 		}
 		mu.Unlock()
+		BackupStateFiles(cfg)
+		fmt.Println("State backup created.")
 		close(stopCh)
 	}()
 
@@ -812,6 +814,11 @@ func main() {
 			saveFailures = 0
 		}
 		mu.Unlock()
+
+		// Periodic state backup (every 12 cycles ≈ hourly at 5-min intervals)
+		if cycle%12 == 0 {
+			BackupStateFiles(cfg)
+		}
 
 		// ML: periodic adaptation check
 		if cfg.AdaptationCheckCycles > 0 && cycle%cfg.AdaptationCheckCycles == 0 {
